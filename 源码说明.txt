@@ -1,0 +1,15 @@
+﻿PCL 自定义主页源码（PCL2 / PCL CE）
+
+构建环境：Windows PowerShell 5.1
+构建命令（在本文件夹中运行）：
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
+
+输出文件（dist 文件夹）：
+  PCL主页安装[支持CE].bat
+  PCL主页安装[支持CE]-使用说明.txt
+  PCL主页安装[支持CE].zip
+
+说明：
+- 源码包不包含已经移除的 InjectDll.ps1（DLL 注入功能）。
+- build.ps1 会从 src 目录读取页面、安装器和工具脚本，生成单文件安装器与 ZIP。
+- 不要修改 src\page.xaml 末尾的 @@YSM-TOOLS-*@@ 标记行。
