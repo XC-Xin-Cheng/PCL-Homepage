@@ -95,17 +95,21 @@ try {
     Write-Host ("当前提交：{0}" -f $parentSha)
     Write-Host ("基础 tree：{0}" -f $baseTreeSha)
 
-    $treeList = Invoke-GhApi @("$apiBase/git/trees/$baseTreeSha", '--jq', '.tree[].path')
+    $treeUrl = "$apiBase/git/trees/" + $baseTreeSha + '?recursive=1'
+    $treeJson = Invoke-GhApi @($treeUrl)
+    $treeObject = $treeJson | ConvertFrom-Json
     $existing = @{}
-    foreach ($line in ($treeList -split "`r?`n")) {
-        if ($line) { $existing[$line] = $true }
+    foreach ($item in @($treeObject.tree)) {
+        if ($item.type -eq 'blob') { $existing[$item.path] = $true }
     }
 
     $entries = New-Object System.Collections.ArrayList
+    $newPaths = @{}
     $i = 0
     foreach ($file in $files) {
         $i++
         $relative = Get-RelativePath $file.FullName
+        $newPaths[$relative] = $true
         $payload = @{
             content  = [Convert]::ToBase64String([IO.File]::ReadAllBytes($file.FullName))
             encoding = 'base64'
@@ -137,14 +141,28 @@ try {
         'readme.txt',
         'src/tools/InjectDll.ps1'
     )
+    $deleted = @{}
     foreach ($path in $deletePaths) {
-        if ($existing.ContainsKey($path)) {
+        if ($existing.ContainsKey($path) -and -not $deleted.ContainsKey($path)) {
             [void]$entries.Add(@{
                 path = $path
                 mode = '100644'
                 type = 'blob'
                 sha  = $null
             })
+            $deleted[$path] = $true
+            Write-Host ("  - {0}" -f $path)
+        }
+    }
+    foreach ($path in @($existing.Keys)) {
+        if ($path -like 'src/*' -and -not $newPaths.ContainsKey($path) -and -not $deleted.ContainsKey($path)) {
+            [void]$entries.Add(@{
+                path = $path
+                mode = '100644'
+                type = 'blob'
+                sha  = $null
+            })
+            $deleted[$path] = $true
             Write-Host ("  - {0}" -f $path)
         }
     }
