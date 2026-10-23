@@ -69,7 +69,7 @@ try {
     }
 
     $files = New-Object System.Collections.ArrayList
-    foreach ($name in @('build.ps1', 'README.md', '源码说明.txt', '.gitignore', 'publish.ps1', 'LICENSE')) {
+    foreach ($name in @('build.ps1', 'README.md', '源码说明.txt', '.gitignore', 'publish.ps1', 'AGENTS.md', 'LICENSE')) {
         $p = Join-Path $root $name
         if (-not (Test-Path -LiteralPath $p -PathType Leaf)) {
             throw "缺少文件：$name"
