@@ -4,6 +4,10 @@
 
 为 PCL2 和 PCL CE 一键安装同一套自定义主页。安装器使用图形界面，支持 15 种语言；安装器界面语言会同步决定主页语言。
 
+## 下载
+
+最新版本见 [GitHub Releases](https://github.com/XC-Xin-Cheng/PCL-Homepage/releases/latest)。发布页提供图形界面 EXE、使用说明和一键安装 ZIP。
+
 ## 功能
 
 - 图形界面 EXE，启动时不显示控制台窗口；命令行参数仍可用于安装和卸载。
