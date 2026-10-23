@@ -1,0 +1,12 @@
+# 构建产物
+build/
+dist/
+
+# 旧版 DLL 注入脚本（不参与构建）
+src/tools/InjectDll.ps1
+
+# 系统/编辑器文件
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

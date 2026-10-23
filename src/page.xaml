@@ -67,25 +67,25 @@
         <StackPanel Grid.Column="0" Margin="0,0,5,0">
             <Grid>
                 <Border Background="#80FFFFFF" CornerRadius="3">
-                    <TextBlock Text="打开游戏目录" FontSize="13" Margin="12,0"
+                    <TextBlock Text="@@PCLHOME_OPEN_GAME@@" FontSize="13" Margin="12,0"
                                Foreground="#FF000000"
                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                IsHitTestVisible="False" />
                 </Border>
                 <local:MyButton Height="35" Text="" Opacity="0"
                                 EventType="打开文件" EventData="cmd.exe|/c pushd &quot;{path}\PCL&quot; &amp; if exist &quot;CustomTools.bat&quot; (call &quot;CustomTools.bat&quot; game) else (powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$c=[IO.File]::ReadAllText('Custom.xaml');if(-not [IO.File]::Exists('CustomTools.bat')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-BAT@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS1@@');if($m.Success){[IO.File]::WriteAllText('CustomTools.bat',$m.Groups[1].Value)}};if(-not [IO.File]::Exists('RefreshLog.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS1@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS2@@');if($m.Success){[IO.File]::WriteAllText('RefreshLog.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('BgRefresh.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS2@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS3@@');if($m.Success){[IO.File]::WriteAllText('BgRefresh.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('Egg.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS3@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS4@@');if($m.Success){[IO.File]::WriteAllText('Egg.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('VideoWall.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS4@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-IMG@@');if($m.Success){[IO.File]::WriteAllText('VideoWall.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};[void][IO.Directory]::CreateDirectory('Pictures');if(-not [IO.File]::Exists('Pictures\CustomHomeBG.jpg')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-IMG@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-END@@');if($m.Success){[IO.File]::WriteAllBytes('Pictures\CustomHomeBG.jpg',[Convert]::FromBase64String(($m.Groups[1].Value -replace '\s','')))}};&quot; &amp; call &quot;CustomTools.bat&quot; game)"
-                                ToolTip="打开 .minecraft 游戏目录" />
+                                ToolTip="@@PCLHOME_OPEN_GAME_TIP@@" />
             </Grid>
             <Grid Margin="0,8,0,0">
                 <Border Background="#80FFFFFF" CornerRadius="3">
-                    <TextBlock Text="打开 Schematics 文件夹" FontSize="13" Margin="12,0"
+                    <TextBlock Text="@@PCLHOME_OPEN_SCHEMATICS@@" FontSize="13" Margin="12,0"
                                Foreground="#FF000000"
                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                IsHitTestVisible="False" />
                 </Border>
                 <local:MyButton Height="35" Text="" Opacity="0"
                                 EventType="打开文件" EventData="cmd.exe|/c pushd &quot;{path}\PCL&quot; &amp; if exist &quot;CustomTools.bat&quot; (call &quot;CustomTools.bat&quot; schematics) else (powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$c=[IO.File]::ReadAllText('Custom.xaml');if(-not [IO.File]::Exists('CustomTools.bat')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-BAT@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS1@@');if($m.Success){[IO.File]::WriteAllText('CustomTools.bat',$m.Groups[1].Value)}};if(-not [IO.File]::Exists('RefreshLog.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS1@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS2@@');if($m.Success){[IO.File]::WriteAllText('RefreshLog.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('BgRefresh.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS2@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS3@@');if($m.Success){[IO.File]::WriteAllText('BgRefresh.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('Egg.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS3@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS4@@');if($m.Success){[IO.File]::WriteAllText('Egg.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('VideoWall.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS4@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-IMG@@');if($m.Success){[IO.File]::WriteAllText('VideoWall.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};[void][IO.Directory]::CreateDirectory('Pictures');if(-not [IO.File]::Exists('Pictures\CustomHomeBG.jpg')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-IMG@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-END@@');if($m.Success){[IO.File]::WriteAllBytes('Pictures\CustomHomeBG.jpg',[Convert]::FromBase64String(($m.Groups[1].Value -replace '\s','')))}};&quot; &amp; call &quot;CustomTools.bat&quot; schematics)"
-                                ToolTip="打开当前版本的 schematics 文件夹" />
+                                ToolTip="@@PCLHOME_OPEN_SCHEMATICS_TIP@@" />
             </Grid>
         </StackPanel>
 
@@ -93,25 +93,25 @@
         <StackPanel Grid.Column="1" Margin="5,0,0,0">
             <Grid>
                 <Border Background="#80FFFFFF" CornerRadius="3">
-                    <TextBlock Text="打开 Mod 文件夹" FontSize="13" Margin="12,0"
+                    <TextBlock Text="@@PCLHOME_OPEN_MODS@@" FontSize="13" Margin="12,0"
                                Foreground="#FF000000"
                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                IsHitTestVisible="False" />
                 </Border>
                 <local:MyButton Height="35" Text="" Opacity="0"
                                 EventType="打开文件" EventData="cmd.exe|/c pushd &quot;{path}\PCL&quot; &amp; if exist &quot;CustomTools.bat&quot; (call &quot;CustomTools.bat&quot; mods) else (powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$c=[IO.File]::ReadAllText('Custom.xaml');if(-not [IO.File]::Exists('CustomTools.bat')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-BAT@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS1@@');if($m.Success){[IO.File]::WriteAllText('CustomTools.bat',$m.Groups[1].Value)}};if(-not [IO.File]::Exists('RefreshLog.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS1@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS2@@');if($m.Success){[IO.File]::WriteAllText('RefreshLog.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('BgRefresh.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS2@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS3@@');if($m.Success){[IO.File]::WriteAllText('BgRefresh.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('Egg.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS3@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS4@@');if($m.Success){[IO.File]::WriteAllText('Egg.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('VideoWall.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS4@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-IMG@@');if($m.Success){[IO.File]::WriteAllText('VideoWall.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};[void][IO.Directory]::CreateDirectory('Pictures');if(-not [IO.File]::Exists('Pictures\CustomHomeBG.jpg')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-IMG@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-END@@');if($m.Success){[IO.File]::WriteAllBytes('Pictures\CustomHomeBG.jpg',[Convert]::FromBase64String(($m.Groups[1].Value -replace '\s','')))}};&quot; &amp; call &quot;CustomTools.bat&quot; mods)"
-                                ToolTip="打开当前版本的 mods 文件夹" />
+                                ToolTip="@@PCLHOME_OPEN_MODS_TIP@@" />
             </Grid>
             <Grid Margin="0,8,0,0">
                 <Border Background="#80FFFFFF" CornerRadius="3">
-                    <TextBlock Text="打开 Saves 文件夹" FontSize="13" Margin="12,0"
+                    <TextBlock Text="@@PCLHOME_OPEN_SAVES@@" FontSize="13" Margin="12,0"
                                Foreground="#FF000000"
                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                IsHitTestVisible="False" />
                 </Border>
                 <local:MyButton Height="35" Text="" Opacity="0"
                                 EventType="打开文件" EventData="cmd.exe|/c pushd &quot;{path}\PCL&quot; &amp; if exist &quot;CustomTools.bat&quot; (call &quot;CustomTools.bat&quot; saves) else (powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$c=[IO.File]::ReadAllText('Custom.xaml');if(-not [IO.File]::Exists('CustomTools.bat')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-BAT@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS1@@');if($m.Success){[IO.File]::WriteAllText('CustomTools.bat',$m.Groups[1].Value)}};if(-not [IO.File]::Exists('RefreshLog.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS1@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS2@@');if($m.Success){[IO.File]::WriteAllText('RefreshLog.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('BgRefresh.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS2@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS3@@');if($m.Success){[IO.File]::WriteAllText('BgRefresh.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('Egg.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS3@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS4@@');if($m.Success){[IO.File]::WriteAllText('Egg.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('VideoWall.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS4@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-IMG@@');if($m.Success){[IO.File]::WriteAllText('VideoWall.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};[void][IO.Directory]::CreateDirectory('Pictures');if(-not [IO.File]::Exists('Pictures\CustomHomeBG.jpg')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-IMG@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-END@@');if($m.Success){[IO.File]::WriteAllBytes('Pictures\CustomHomeBG.jpg',[Convert]::FromBase64String(($m.Groups[1].Value -replace '\s','')))}};&quot; &amp; call &quot;CustomTools.bat&quot; saves)"
-                                ToolTip="打开当前版本的 saves 文件夹" />
+                                ToolTip="@@PCLHOME_OPEN_SAVES_TIP@@" />
             </Grid>
         </StackPanel>
     </Grid>
@@ -119,14 +119,14 @@
     <!-- 刷新背景图片：驱动 PCL 设置页原生刷新，不重启启动器 -->
     <Grid Grid.Row="1" Margin="0,8,0,0">
         <Border Background="#80FFFFFF" CornerRadius="3">
-            <TextBlock Text="刷新背景图片" FontSize="13" Margin="12,0"
+            <TextBlock Text="@@PCLHOME_REFRESH_BG@@" FontSize="13" Margin="12,0"
                        Foreground="#FF000000"
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        IsHitTestVisible="False" />
         </Border>
         <local:MyButton Height="35" Text="" Opacity="0"
                         EventType="打开文件" EventData="cmd.exe|/c pushd &quot;{path}\PCL&quot; &amp; if exist &quot;CustomTools.bat&quot; (call &quot;CustomTools.bat&quot; bg) else (powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$c=[IO.File]::ReadAllText('Custom.xaml');if(-not [IO.File]::Exists('CustomTools.bat')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-BAT@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS1@@');if($m.Success){[IO.File]::WriteAllText('CustomTools.bat',$m.Groups[1].Value)}};if(-not [IO.File]::Exists('RefreshLog.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS1@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS2@@');if($m.Success){[IO.File]::WriteAllText('RefreshLog.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('BgRefresh.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS2@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS3@@');if($m.Success){[IO.File]::WriteAllText('BgRefresh.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('Egg.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS3@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS4@@');if($m.Success){[IO.File]::WriteAllText('Egg.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('VideoWall.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS4@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-IMG@@');if($m.Success){[IO.File]::WriteAllText('VideoWall.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};[void][IO.Directory]::CreateDirectory('Pictures');if(-not [IO.File]::Exists('Pictures\CustomHomeBG.jpg')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-IMG@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-END@@');if($m.Success){[IO.File]::WriteAllBytes('Pictures\CustomHomeBG.jpg',[Convert]::FromBase64String(($m.Groups[1].Value -replace '\s','')))}};&quot; &amp; call &quot;CustomTools.bat&quot; bg)"
-                        ToolTip="让 PCL 重新随机选择一张背景图片" />
+                        ToolTip="@@PCLHOME_REFRESH_BG_TIP@@" />
     </Grid>
 
     <!-- 中部：左侧游戏日志（只读，可滚动、可选中复制），右侧历史日志用记事本打开 -->
@@ -145,30 +145,30 @@
 
                 <Grid Grid.Row="0" Margin="0,0,0,5">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="游戏日志" FontSize="13" Foreground="#FFF0F0F0"
+                        <TextBlock Text="@@PCLHOME_GAME_LOG@@" FontSize="13" Foreground="#FFF0F0F0"
                                    VerticalAlignment="Center" IsHitTestVisible="False" />
 
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                         <Grid Width="66">
                             <Border Background="#66FFFFFF" CornerRadius="3" />
-                            <TextBlock Text="刷新日志" FontSize="12"
+                            <TextBlock Text="@@PCLHOME_REFRESH_LOG@@" FontSize="12"
                                        Foreground="#FF000000"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        IsHitTestVisible="False" />
                             <local:MyButton Height="26" Text="" Opacity="0"
                                             EventType="打开文件" EventData="cmd.exe|/c pushd &quot;{path}\PCL&quot; &amp; if exist &quot;CustomTools.bat&quot; (call &quot;CustomTools.bat&quot; logs) else (powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$c=[IO.File]::ReadAllText('Custom.xaml');if(-not [IO.File]::Exists('CustomTools.bat')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-BAT@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS1@@');if($m.Success){[IO.File]::WriteAllText('CustomTools.bat',$m.Groups[1].Value)}};if(-not [IO.File]::Exists('RefreshLog.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS1@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS2@@');if($m.Success){[IO.File]::WriteAllText('RefreshLog.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('BgRefresh.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS2@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS3@@');if($m.Success){[IO.File]::WriteAllText('BgRefresh.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('Egg.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS3@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS4@@');if($m.Success){[IO.File]::WriteAllText('Egg.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('VideoWall.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS4@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-IMG@@');if($m.Success){[IO.File]::WriteAllText('VideoWall.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};[void][IO.Directory]::CreateDirectory('Pictures');if(-not [IO.File]::Exists('Pictures\CustomHomeBG.jpg')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-IMG@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-END@@');if($m.Success){[IO.File]::WriteAllBytes('Pictures\CustomHomeBG.jpg',[Convert]::FromBase64String(($m.Groups[1].Value -replace '\s','')))}};&quot; &amp; call &quot;CustomTools.bat&quot; logs)"
-                                            ToolTip="重新读取游戏日志并刷新主页（等同于按 F5）" />
+                                            ToolTip="@@PCLHOME_REFRESH_LOG_TIP@@" />
                         </Grid>
                         <Grid Width="92" Margin="6,0,0,0">
                             <Border Background="#66FFFFFF" CornerRadius="3" />
-                            <TextBlock Text="在记事本打开" FontSize="12"
+                            <TextBlock Text="@@PCLHOME_NOTEPAD@@" FontSize="12"
                                        Foreground="#FF000000"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        IsHitTestVisible="False" />
                             <local:MyButton Height="26" Text="" Opacity="0"
                                             EventType="打开文件" EventData="cmd.exe|/c pushd &quot;{path}\PCL&quot; &amp; if exist &quot;CustomTools.bat&quot; (call &quot;CustomTools.bat&quot; glog) else (powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$c=[IO.File]::ReadAllText('Custom.xaml');if(-not [IO.File]::Exists('CustomTools.bat')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-BAT@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS1@@');if($m.Success){[IO.File]::WriteAllText('CustomTools.bat',$m.Groups[1].Value)}};if(-not [IO.File]::Exists('RefreshLog.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS1@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS2@@');if($m.Success){[IO.File]::WriteAllText('RefreshLog.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('BgRefresh.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS2@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS3@@');if($m.Success){[IO.File]::WriteAllText('BgRefresh.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('Egg.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS3@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS4@@');if($m.Success){[IO.File]::WriteAllText('Egg.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('VideoWall.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS4@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-IMG@@');if($m.Success){[IO.File]::WriteAllText('VideoWall.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};[void][IO.Directory]::CreateDirectory('Pictures');if(-not [IO.File]::Exists('Pictures\CustomHomeBG.jpg')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-IMG@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-END@@');if($m.Success){[IO.File]::WriteAllBytes('Pictures\CustomHomeBG.jpg',[Convert]::FromBase64String(($m.Groups[1].Value -replace '\s','')))}};&quot; &amp; call &quot;CustomTools.bat&quot; glog)"
-                                            ToolTip="用记事本打开正在运行的游戏日志（latest.log）；游戏未运行时无效" />
+                                            ToolTip="@@PCLHOME_OPEN_GAME_LOG_TIP@@" />
                         </Grid>
                     </StackPanel>
                 </Grid>
@@ -186,10 +186,10 @@
                 Background="#80FFFFFF" CornerRadius="3">
             <Grid x:Name="LogFolderButtonArea" VerticalAlignment="Stretch">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="5">
-                    <TextBlock Text="日志文件夹" FontSize="12.5" Margin="0,0,0,7"
+                    <TextBlock Text="@@PCLHOME_LOG_FOLDER@@" FontSize="12.5" Margin="0,0,0,7"
                                Foreground="#FF000000"
                                HorizontalAlignment="Center" IsHitTestVisible="False" />
-                    <TextBlock Text="打开日志文件夹" FontSize="11.5"
+                    <TextBlock Text="@@PCLHOME_OPEN_LOG_FOLDER@@" FontSize="11.5"
                                Foreground="#FF000000"
                                HorizontalAlignment="Center" IsHitTestVisible="False" />
                 </StackPanel>
@@ -211,20 +211,20 @@
 
                 <Grid Grid.Row="0" Margin="0,0,0,5">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="启动器日志" FontSize="13" Foreground="#FFF0F0F0"
+                        <TextBlock Text="@@PCLHOME_LAUNCHER_LOG@@" FontSize="13" Foreground="#FFF0F0F0"
                                    VerticalAlignment="Center" IsHitTestVisible="False" />
 
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                         <Grid Width="92">
                             <Border Background="#66FFFFFF" CornerRadius="3" />
-                            <TextBlock Text="在记事本打开" FontSize="12"
+                            <TextBlock Text="@@PCLHOME_NOTEPAD@@" FontSize="12"
                                        Foreground="#FF000000"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        IsHitTestVisible="False" />
                             <local:MyButton Height="26" Text="" Opacity="0"
                                             EventType="打开文件" EventData="cmd.exe|/c pushd &quot;{path}\PCL&quot; &amp; if exist &quot;CustomTools.bat&quot; (call &quot;CustomTools.bat&quot; log1) else (powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$c=[IO.File]::ReadAllText('Custom.xaml');if(-not [IO.File]::Exists('CustomTools.bat')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-BAT@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS1@@');if($m.Success){[IO.File]::WriteAllText('CustomTools.bat',$m.Groups[1].Value)}};if(-not [IO.File]::Exists('RefreshLog.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS1@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS2@@');if($m.Success){[IO.File]::WriteAllText('RefreshLog.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('BgRefresh.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS2@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS3@@');if($m.Success){[IO.File]::WriteAllText('BgRefresh.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('Egg.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS3@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS4@@');if($m.Success){[IO.File]::WriteAllText('Egg.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('VideoWall.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS4@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-IMG@@');if($m.Success){[IO.File]::WriteAllText('VideoWall.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};[void][IO.Directory]::CreateDirectory('Pictures');if(-not [IO.File]::Exists('Pictures\CustomHomeBG.jpg')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-IMG@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-END@@');if($m.Success){[IO.File]::WriteAllBytes('Pictures\CustomHomeBG.jpg',[Convert]::FromBase64String(($m.Groups[1].Value -replace '\s','')))}};&quot; &amp; call &quot;CustomTools.bat&quot; log1)"
-                                            ToolTip="用记事本打开本次启动器会话日志" />
+                                            ToolTip="@@PCLHOME_OPEN_LAUNCHER_LOG_TIP@@" />
                         </Grid>
                     </StackPanel>
                 </Grid>

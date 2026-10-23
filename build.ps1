@@ -163,14 +163,60 @@ for ($ti = 0; $ti -lt $toolFiles.Count; $ti++) {
     Assert-True ($m.Groups[1].Value -eq $tools[$t.Name]) ('tool text mismatch in Custom.xaml: ' + $t.Name)
 }
 
+# ==== launcher executable ====
+$launcherSource = Join-Path $srcDir 'launcher.cs'
+$iconPath = Join-Path $srcDir 'app.ico'
+Assert-True (Test-Path -LiteralPath $launcherSource) 'src\launcher.cs is missing'
+Assert-True (Test-Path -LiteralPath $iconPath) 'src\app.ico is missing'
+
+$cscCandidates = @(
+    (Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'),
+    (Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe')
+)
+$csc = $cscCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+Assert-True ([bool]$csc) 'csc.exe (.NET Framework 4.x) was not found'
+
+$exePath = Join-Path $distDir 'PCL主页安装[支持CE].exe'
+if (Test-Path -LiteralPath $exePath) { Remove-Item -LiteralPath $exePath -Force }
+$cscArgs = @(
+    '/nologo',
+    '/target:winexe',
+    '/optimize+',
+    '/platform:anycpu',
+    ('/out:' + $exePath),
+    ('/resource:' + $batPath + ',PCLHomePayload.bat'),
+    ('/win32icon:' + $iconPath),
+    '/r:System.dll',
+    '/r:System.Core.dll',
+    '/r:System.Windows.Forms.dll',
+    '/r:System.Drawing.dll',
+    $launcherSource
+)
+& $csc $cscArgs
+Assert-True ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $exePath)) 'launcher compile failed'
+
 # ==== readme and zip ====
 $readmePath = Join-Path $distDir 'PCL主页安装[支持CE]-使用说明.txt'
 [IO.File]::WriteAllText($readmePath, ($readmeText -replace "`n", "`r`n") + "`r`n", [Text.UTF8Encoding]::new($false))
 $zipPath = Join-Path $distDir 'PCL主页安装[支持CE].zip'
 if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
-Compress-Archive -LiteralPath @($batPath, $readmePath) -DestinationPath $zipPath -CompressionLevel Optimal
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$zip = [System.IO.Compression.ZipFile]::Open($zipPath, [System.IO.Compression.ZipArchiveMode]::Create)
+try {
+    foreach ($file in @($exePath, $readmePath)) {
+        [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+            $zip,
+            $file,
+            [System.IO.Path]::GetFileName($file),
+            [System.IO.Compression.CompressionLevel]::Optimal)
+    }
+} finally {
+    $zip.Dispose()
+}
 
-Write-Output ('built: ' + $batPath)
+Write-Output ('built: ' + $exePath)
 Write-Output ('payload: ' + $payloadBytes.Length + ' bytes, data lines: ' + (Get-B64Lines $payloadBytes 100).Count)
 Write-Output ('batch: ' + (Get-Item -LiteralPath $batPath).Length + ' bytes, max line: ' + $maxLen)
+Write-Output ('exe: ' + (Get-Item -LiteralPath $exePath).Length + ' bytes')
 Write-Output ('zip: ' + $zipPath)

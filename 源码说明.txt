@@ -1,15 +1,38 @@
-﻿PCL 自定义主页源码（PCL2 / PCL CE）
+PCL 自定义主页安装包 · 源码
+============================
 
-构建环境：Windows PowerShell 5.1
-构建命令（在本文件夹中运行）：
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
+构建环境
+- Windows 10/11
+- PowerShell 5.1
+- .NET Framework 4.x（系统自带 csc.exe）
 
-输出文件（dist 文件夹）：
-  PCL主页安装[支持CE].bat
-  PCL主页安装[支持CE]-使用说明.txt
-  PCL主页安装[支持CE].zip
+构建
+1. 解压本源码包。
+2. 右键 build.ps1 →“使用 PowerShell 运行”。
+   或在 PowerShell 中执行：
+   powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 
-说明：
-- 源码包不包含已经移除的 InjectDll.ps1（DLL 注入功能）。
-- build.ps1 会从 src 目录读取页面、安装器和工具脚本，生成单文件安装器与 ZIP。
-- 不要修改 src\page.xaml 末尾的 @@YSM-TOOLS-*@@ 标记行。
+输出（dist 文件夹）
+- PCL主页安装[支持CE].bat
+- PCL主页安装[支持CE].exe
+- PCL主页安装[支持CE]-使用说明.txt
+- PCL主页安装[支持CE].zip
+
+结构
+- build.ps1：生成 BAT、把 BAT 嵌入 EXE，并打包一键安装 ZIP。
+- src/installer.ps1：安装/卸载逻辑、15 种界面语言和主页语言。
+- src/page.xaml：自定义主页模板，包含 @@PCLHOME_*@@ 本地化标记。
+- src/header.bat：BAT 解压和控制台处理。
+- src/launcher.cs：WinForms EXE 引导器，负责解压并运行内嵌 BAT。
+- src/tools/：主页按钮使用的辅助脚本和共享背景图。
+- publish.ps1：维护脚本，通过已登录的 GitHub CLI 发布当前源码快照。
+
+说明
+- 安装器语言选择会同时决定主页语言；命令行可用 PCLHOME_LANG 覆盖。
+- 旧版 DLL 注入脚本 InjectDll.ps1 已从当前版本移除，不参与构建。
+- 安装器只修改所选启动器（PCL2 或 PCL CE）的配置文件。
+- 一键安装 ZIP 只包含 EXE 和使用说明，BAT 是构建中间产物。
+
+GitHub 仓库
+- https://github.com/XC-Xin-Cheng/PCL-Homepage
+- 许可证：GPL-3.0，详见 LICENSE。
