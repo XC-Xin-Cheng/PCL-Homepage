@@ -1,19 +1,15 @@
-﻿# Egg.ps1 v4 - easter egg of the custom homepage.
+﻿# Egg.ps1 v5 - easter egg of the custom homepage.
 # Press Shift+X+C while the PCL window is focused: the background watcher
-# (RefreshLog.ps1 -Watch) opens a blank cmd window running this script.
-# Type Yes + Enter and the theme picture (Pictures\CustomHomeBG.jpg) becomes
-# the Windows desktop wallpaper, while the lock screen gets the matching
-# still (Pictures\CustomHomeLock.png).  The video wallpaper experiment is
-# gone for good: recent Explorer builds have no background layer to park a
-# player window on, so a plain wallpaper is what actually shows up.
-# While all this happens the window maximizes itself and a plain progress
-# bar runs with no text; it closes on its own ten seconds after the job is
-# done.  When the wallpaper cannot be set, the line under the bar reads:
-# 可惜了
-# Type No + Enter: nothing is changed, the window just closes.
+# (RefreshLog.ps1 -Watch) opens this script through PCLHomeLaunch.vbs.
+# A small WinForms dialog asks whether to use the theme picture
+# (Pictures\CustomHomeBG.jpg) as the Windows desktop wallpaper and the
+# matching still (Pictures\CustomHomeLock.png) as the lock screen picture.
+# There is no console window at any point.  The dialog closes by itself
+# ten seconds after the job is done; on failure the status reads: 可惜了
 #
 # Sandbox switches (used by the sandbox test, never in normal use):
 #   PCLTOOLS_EGG_MOCK=ok|fail  same flow, but nothing real is touched
+#   PCLTOOLS_EGG_AUTO=yes|no   answer without showing the dialog
 #   PCLTOOLS_EGG_WAIT=<ms>     override the 10 second close delay
 #
 # This file is embedded inside an XML comment of Custom.xaml: never write
@@ -28,10 +24,10 @@ $script:wallJpg = $script:Base + 'Pictures\CustomHomeBG.jpg'
 $script:lockImg = $script:Base + 'Pictures\CustomHomeLock.png'
 $script:log     = $script:Base + 'CustomTools.log'
 $script:mock    = [string]$env:PCLTOOLS_EGG_MOCK
+$script:auto    = [string]$env:PCLTOOLS_EGG_AUTO
 $script:wait    = 10000
 try { if ($env:PCLTOOLS_EGG_WAIT) { $script:wait = [int]$env:PCLTOOLS_EGG_WAIT } } catch { }
-$script:redirected = $true
-try { $script:redirected = [bool][Console]::IsOutputRedirected } catch { }
+if ($script:wait -lt 1) { $script:wait = 1 }
 
 function ELog([string]$s) {
     try { [IO.File]::AppendAllText($script:log, ('[' + (Get-Date).ToString('yy/MM/dd HH:mm:ss') + '] egg: ' + $s + "`r`n"), [Text.UTF8Encoding]::new($true)) } catch { }
@@ -39,24 +35,8 @@ function ELog([string]$s) {
 
 function Add-EggNative {
     if (-not ('EggNative' -as [type])) {
-        Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public static class EggNative{[DllImport("kernel32.dll")]public static extern IntPtr GetConsoleWindow();[DllImport("user32.dll")]public static extern bool ShowWindow(IntPtr h,int c);[DllImport("user32.dll")]public static extern bool SetForegroundWindow(IntPtr h);[DllImport("user32.dll")]public static extern bool BringWindowToTop(IntPtr h);[DllImport("user32.dll",CharSet=CharSet.Unicode,SetLastError=true)]public static extern bool SystemParametersInfo(int a,int b,string c,int d);}'
+        Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public static class EggNative{[DllImport("user32.dll",CharSet=CharSet.Unicode,SetLastError=true)]public static extern bool SystemParametersInfo(int a,int b,string c,int d);}'
     }
-}
-
-function Show-BarFrame([int]$pct, [int]$width, [int]$x, [int]$y) {
-    if ($pct -lt 0) { $pct = 0 }
-    if ($pct -gt 100) { $pct = 100 }
-    $fill = [int][Math]::Round($width * $pct / 100.0)
-    if ($script:redirected) {
-        Write-Output ('#' + $pct.ToString('000') + ' ' + ('=' * $fill) + ('.' * ($width - $fill)))
-        return
-    }
-    try { [Console]::SetCursorPosition($x, $y) } catch { }
-    try { [Console]::ForegroundColor = 'Green' } catch { }
-    try { [Console]::Write(('#' * $fill)) } catch { }
-    try { [Console]::ForegroundColor = 'DarkGray' } catch { }
-    try { [Console]::Write(('-' * ($width - $fill))) } catch { }
-    try { [Console]::ResetColor() } catch { }
 }
 
 # Desktop wallpaper through the shell API; the picture fills the screen.
@@ -99,88 +79,143 @@ function Set-LockPicture([string]$imgPath) {
     }
 }
 
-# ==== main ====
-try { [Console]::Title = 'C:\Windows\system32\cmd.exe' } catch { }
-# Make sure the window really shows up in front even when the watcher that
-# started it lives in the background.
-if (-not $script:redirected) {
-    try {
-        Add-EggNative
-        $ch0 = [EggNative]::GetConsoleWindow()
-        if ($ch0.ToInt64() -ne 0) {
-            [void][EggNative]::ShowWindow($ch0, 9)
-            [void][EggNative]::BringWindowToTop($ch0)
-            [void][EggNative]::SetForegroundWindow($ch0)
-        }
-    } catch { }
-}
-
-$ans = $null
-try { $ans = [Console]::ReadLine() } catch { }
-while ($null -ne $ans) {
-    $t = ([string]$ans).Trim()
-    if ($t -ieq 'yes') { break }
-    if ($t -ieq 'no') {
-        ELog 'declined'
-        exit 0
+function Invoke-Theme {
+    if ($script:mock) {
+        ELog ('mock: ' + $script:mock)
+        return ($script:mock -eq 'ok')
     }
-    try { $ans = [Console]::ReadLine() } catch { $ans = $null }
-}
-if ($null -eq $ans) { exit 0 }
-ELog 'accepted'
-
-if (-not $script:redirected) {
-    try {
-        Add-EggNative
-        $ch = [EggNative]::GetConsoleWindow()
-        if ($ch.ToInt64() -ne 0) { [void][EggNative]::ShowWindow($ch, 3) }
-    } catch { }
-    Start-Sleep -Milliseconds 300
-    try { [Console]::Clear() } catch { }
-}
-
-$winW = 80; $winH = 25
-try { $winW = [Console]::WindowWidth } catch { }
-try { $winH = [Console]::WindowHeight } catch { }
-$barW = [int][Math]::Min(80, [Math]::Max(20, $winW - 16))
-$barX = [int][Math]::Floor(($winW - $barW) / 2)
-$barY = [int][Math]::Floor($winH / 2)
-if (-not $script:redirected) { try { [Console]::CursorVisible = $false } catch { } }
-
-foreach ($p in @(0, 6, 12, 18, 24, 30)) { Show-BarFrame $p $barW $barX $barY; Start-Sleep -Milliseconds 60 }
-
-$ok = $false
-if ($script:mock) {
-    ELog ('mock: ' + $script:mock)
-    for ($p = 36; $p -le 66; $p += 10) { Show-BarFrame $p $barW $barX $barY; Start-Sleep -Milliseconds 40 }
-    $ok = ($script:mock -eq 'ok')
-} else {
     $wall = $script:wallJpg
     if (-not [IO.File]::Exists($wall)) { $wall = $script:lockImg }
     if (-not [IO.File]::Exists($wall)) {
         ELog 'no wallpaper image found'
-    } else {
-        ELog ('wallpaper image: ' + $wall)
-        Show-BarFrame 40 $barW $barX $barY
-        $ok = Set-DesktopWallpaper $wall
-        $lockOk = Set-LockPicture $script:lockImg
-        ELog ('lock screen: ' + [string]$lockOk)
+        return $false
     }
-}
-ELog ('result: ' + [string]$ok)
-
-if ($ok) {
-    for ($p = 75; $p -le 100; $p += 5) { Show-BarFrame $p $barW $barX $barY; Start-Sleep -Milliseconds 70 }
-} else {
-    if ($script:redirected) { Write-Output '可惜了' }
-    else {
-        try { [Console]::SetCursorPosition($barX, $barY + 1) } catch { }
-        try { [Console]::ForegroundColor = 'Red' } catch { }
-        try { [Console]::Write('可惜了') } catch { }
-        try { [Console]::ResetColor() } catch { }
-    }
+    ELog ('wallpaper image: ' + $wall)
+    $ok = Set-DesktopWallpaper $wall
+    $lockOk = Set-LockPicture $script:lockImg
+    ELog ('lock screen: ' + [string]$lockOk)
+    return $ok
 }
 
-if (-not $script:redirected) { try { [Console]::CursorVisible = $true } catch { } }
-Start-Sleep -Milliseconds $script:wait
+# Some tests and command-line checks do not have a desktop to show a form on.
+# They can answer through PCLTOOLS_EGG_AUTO and get the same result silently.
+if ($script:mock -and -not $script:auto) { $script:auto = 'yes' }
+if ($script:auto -match '^(?i:yes|no)$') {
+    if ($script:auto -match '^(?i:no)$') {
+        ELog 'declined'
+        exit 0
+    }
+    ELog 'accepted'
+    $ok = Invoke-Theme
+    ELog ('result: ' + [string]$ok)
+    Start-Sleep -Milliseconds $script:wait
+    exit 0
+}
+
+try {
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+    [Windows.Forms.Application]::EnableVisualStyles()
+
+    $script:form = New-Object Windows.Forms.Form
+    $script:form.Text = 'PCL 自定义主页'
+    $script:form.StartPosition = 'CenterScreen'
+    $script:form.FormBorderStyle = 'FixedDialog'
+    $script:form.MaximizeBox = $false
+    $script:form.MinimizeBox = $false
+    $script:form.ShowInTaskbar = $true
+    $script:form.TopMost = $true
+    $script:form.ClientSize = New-Object Drawing.Size(420, 180)
+
+    $title = New-Object Windows.Forms.Label
+    $title.Text = '要把主题图片设为 Windows 桌面壁纸吗？'
+    $title.Font = New-Object Drawing.Font('Microsoft YaHei UI', 11, [Drawing.FontStyle]::Regular)
+    $title.AutoSize = $true
+    $title.Location = New-Object Drawing.Point(24, 24)
+    $script:form.Controls.Add($title)
+
+    $detail = New-Object Windows.Forms.Label
+    $detail.Text = '桌面和锁屏都会使用这张主题图片；选择 No 则不做任何修改。'
+    $detail.Font = New-Object Drawing.Font('Microsoft YaHei UI', 9, [Drawing.FontStyle]::Regular)
+    $detail.ForeColor = [Drawing.Color]::DimGray
+    $detail.AutoSize = $true
+    $detail.Location = New-Object Drawing.Point(26, 58)
+    $script:form.Controls.Add($detail)
+
+    $script:yes = New-Object Windows.Forms.Button
+    $script:yes.Text = 'Yes'
+    $script:yes.Size = New-Object Drawing.Size(92, 30)
+    $script:yes.Location = New-Object Drawing.Point(214, 120)
+    $script:form.Controls.Add($script:yes)
+
+    $script:no = New-Object Windows.Forms.Button
+    $script:no.Text = 'No'
+    $script:no.Size = New-Object Drawing.Size(92, 30)
+    $script:no.Location = New-Object Drawing.Point(312, 120)
+    $script:form.Controls.Add($script:no)
+
+    $script:bar = New-Object Windows.Forms.ProgressBar
+    $script:bar.Minimum = 0
+    $script:bar.Maximum = 100
+    $script:bar.Value = 0
+    $script:bar.Size = New-Object Drawing.Size(372, 18)
+    $script:bar.Location = New-Object Drawing.Point(24, 88)
+    $script:bar.Visible = $false
+    $script:form.Controls.Add($script:bar)
+
+    $script:status = New-Object Windows.Forms.Label
+    $script:status.Text = ''
+    $script:status.Font = New-Object Drawing.Font('Microsoft YaHei UI', 10, [Drawing.FontStyle]::Regular)
+    $script:status.AutoSize = $false
+    $script:status.TextAlign = 'MiddleCenter'
+    $script:status.Size = New-Object Drawing.Size(372, 24)
+    $script:status.Location = New-Object Drawing.Point(24, 112)
+    $script:status.Visible = $false
+    $script:form.Controls.Add($script:status)
+
+    $script:timer = New-Object Windows.Forms.Timer
+    $script:timer.Interval = $script:wait
+    $script:timer.Add_Tick({
+        $script:timer.Stop()
+        $script:form.Close()
+    })
+
+    function Set-EggProgress([int]$value, [string]$text, [bool]$failed) {
+        try {
+            $script:bar.Value = [Math]::Min(100, [Math]::Max(0, $value))
+            $script:status.Text = $text
+            if ($failed) { $script:status.ForeColor = [Drawing.Color]::Firebrick }
+            else { $script:status.ForeColor = [Drawing.Color]::ForestGreen }
+            [Windows.Forms.Application]::DoEvents()
+        } catch { }
+    }
+
+    $script:no.Add_Click({
+        ELog 'declined'
+        $script:form.Close()
+    })
+
+    $script:yes.Add_Click({
+        ELog 'accepted'
+        $script:yes.Visible = $false
+        $script:no.Visible = $false
+        $script:bar.Visible = $true
+        $script:status.Visible = $true
+        Set-EggProgress 25 '正在设置...' $false
+        $ok = Invoke-Theme
+        ELog ('result: ' + [string]$ok)
+        if ($ok) { Set-EggProgress 100 '完成' $false }
+        else { Set-EggProgress 100 '可惜了' $true }
+        $script:timer.Start()
+    })
+
+    $script:form.Add_Shown({
+        $script:form.Activate()
+        $script:form.BringToFront()
+    })
+
+    [void]$script:form.ShowDialog()
+} catch {
+    ELog ('dialog failed: ' + [string]$_.Exception.Message)
+}
 exit 0

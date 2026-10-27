@@ -32,6 +32,13 @@ $script:guiStatusTone = 'muted'
 $script:guiStatusArgs = @()
 $script:guiTarget = ''
 $script:ui = $null
+# PCL versions strictly above this are incompatible: their built-in homepage
+# handling makes this custom homepage obsolete.  2.99.0.0 itself stays
+# supported, so the comparison below is "greater than", not "greater or equal".
+$script:MaxSupportedPclVersion = [version]'2.99.0.0'
+$script:incompatiblePcl = $false
+$script:incompatiblePclVersion = ''
+$script:pclCloseCancelled = $false
 
 function Normalize-Flavor([string]$f) {
     switch ($f.Trim().ToLowerInvariant()) {
@@ -190,6 +197,196 @@ function Get-FlavorForDir([string]$d) {
     if (Test-IsPcl2Data $d) { return 'pcl' }
     return ''
 }
+
+# ==== launcher version guard ====
+# The launcher exe is normally next to the data folder, but some users select
+# the data folder directly.  Search both, without writing anything.
+function Get-PclLauncherExe([string]$dir, [string]$flavor) {
+    if (-not $dir) { return @() }
+    $roots = @($dir)
+    try {
+        $parent = Split-Path -Path $dir -Parent
+        if ($parent -and $parent -ne $dir -and $parent -notin $roots) { $roots += $parent }
+    } catch { }
+
+    $result = New-Object 'System.Collections.Generic.List[object]'
+    $seen = @{}
+    foreach ($root in $roots) {
+        if (-not (Test-Path -LiteralPath $root -PathType Container)) { continue }
+        foreach ($f in @(Get-ChildItem -LiteralPath $root -Filter *.exe -File -ErrorAction SilentlyContinue)) {
+            $full = $f.FullName
+            if ($seen.ContainsKey($full)) { continue }
+            $name = $f.Name
+            $match = $false
+            if ($flavor -eq 'ce') {
+                $match = $name -match '^PCL2_CE|^PCLCE|^PCL CE'
+            } elseif ($flavor -eq 'pcl') {
+                $match = $name -match '^PCL(\.exe)?$|^PCL2(?!_CE)|^Plain Craft Launcher 2'
+            } else {
+                $match = $name -match '^PCL(\.exe)?$|^PCL2|^Plain Craft Launcher 2|^PCLCE|^PCL CE'
+            }
+            if ($match) {
+                $seen[$full] = $true
+                [void]$result.Add($f)
+            }
+        }
+    }
+    return @($result.ToArray())
+}
+
+# FileVersion is the reliable field: PCL CE reports ProductVersion as
+# "1.0.0+<commit>" while FileVersion is the actual release number.  Use
+# ProductVersion only when FileVersion is missing or zero.
+function Get-PclExeVersion([string]$path) {
+    try {
+        $vi = (Get-Item -LiteralPath $path -ErrorAction Stop).VersionInfo
+        foreach ($raw in @([string]$vi.FileVersion, [string]$vi.ProductVersion)) {
+            if (-not $raw) { continue }
+            $m = [regex]::Match($raw, '(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:\.(\d+))?')
+            if (-not $m.Success) { continue }
+            $parts = @(0, 0, 0, 0)
+            for ($i = 1; $i -le 4; $i++) {
+                $g = $m.Groups[$i]
+                if ($g.Success -and $g.Value) {
+                    $n = 0
+                    if ([int]::TryParse($g.Value, [ref]$n)) { $parts[$i - 1] = $n }
+                }
+            }
+            $v = [version]($parts -join '.')
+            if ($v -ne [version]'0.0.0.0') { return $v }
+        }
+        return $null
+    } catch {
+        return $null
+    }
+}
+
+function Get-PclVersionState([string]$dir, [string]$flavor) {
+    $exes = @(Get-PclLauncherExe $dir $flavor)
+    $best = $null
+    $bestPath = ''
+    foreach ($e in $exes) {
+        $v = Get-PclExeVersion $e.FullName
+        if ($v -and (-not $best -or $v -gt $best)) {
+            $best = $v
+            $bestPath = $e.FullName
+        }
+    }
+    return [pscustomobject]@{
+        Found       = ($exes.Count -gt 0)
+        Version     = $best
+        Path        = $bestPath
+        Unsupported = [bool]($best -and $best -gt $script:MaxSupportedPclVersion)
+        Files       = @($exes | ForEach-Object { $_.FullName })
+    }
+}
+
+function Show-IncompatiblePcl($state) {
+    $script:incompatiblePcl = $true
+    $script:incompatiblePclVersion = if ($state -and $state.Version) { [string]$state.Version } else { '' }
+    if ($script:guiMode) {
+        [void][System.Windows.Forms.MessageBox]::Show((T 'incompatible_pcl'), (T 'app_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+        return
+    }
+    $lang = $script:guiLang
+    if (-not $lang) { $lang = $script:homeLang }
+    $msg = ''
+    try {
+        $script:guiLang = $lang
+        $msg = [string](T 'incompatible_pcl')
+    } catch { }
+    if (-not $msg -or $msg -eq 'incompatible_pcl') {
+        $msg = "你这个版本的PCL安装主页已经没有意义了`n未对您的计算机进行更改"
+    }
+    Say ''
+    foreach ($line in ($msg -split "\r?\n")) { Say $line }
+    Say ''
+}
+
+# GUI confirmation with literal YES / NO buttons.  A normal MessageBox would
+# use the Windows display language for its buttons, but this prompt is
+# intentionally YES / NO in every installer language.
+function Show-ClosePclDialog {
+    if (-not $script:ui) { return $false }
+    $dlg = New-Object System.Windows.Forms.Form
+    $dlg.Text = T 'pcl_running_title'
+    $dlg.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
+    $dlg.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterParent
+    $dlg.MinimizeBox = $false
+    $dlg.MaximizeBox = $false
+    $dlg.ShowInTaskbar = $false
+    $dlg.ShowIcon = $false
+    $dlg.Font = $script:ui.form.Font
+    $dlg.BackColor = $script:ui.form.BackColor
+    $dlg.ForeColor = $script:ui.form.ForeColor
+    $dlg.ClientSize = New-Object System.Drawing.Size(460, 160)
+
+    $label = New-Object System.Windows.Forms.Label
+    $label.Text = T 'confirm_close_pcl'
+    $label.AutoSize = $false
+    $label.Location = New-Object System.Drawing.Point(18, 18)
+    $label.Size = New-Object System.Drawing.Size(424, 78)
+    $label.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+    $label.Font = $script:ui.form.Font
+    $label.BackColor = [System.Drawing.Color]::Transparent
+    $dlg.Controls.Add($label)
+
+    $yes = New-Object System.Windows.Forms.Button
+    $yes.Text = 'YES'
+    $yes.Size = New-Object System.Drawing.Size(96, 32)
+    $yes.Location = New-Object System.Drawing.Point(240, 108)
+    $yes.DialogResult = [System.Windows.Forms.DialogResult]::Yes
+    $dlg.Controls.Add($yes)
+
+    $no = New-Object System.Windows.Forms.Button
+    $no.Text = 'NO'
+    $no.Size = New-Object System.Drawing.Size(96, 32)
+    $no.Location = New-Object System.Drawing.Point(346, 108)
+    $no.DialogResult = [System.Windows.Forms.DialogResult]::No
+    $dlg.Controls.Add($no)
+
+    $dlg.AcceptButton = $yes
+    $dlg.CancelButton = $no
+    $r = $dlg.ShowDialog($script:ui.form)
+    $dlg.Dispose()
+    return ($r -eq [System.Windows.Forms.DialogResult]::Yes)
+}
+
+function Confirm-ClosePcl([string]$flavor) {
+    if ($script:testMode) { return $true }
+    $script:pclCloseCancelled = $false
+    if (-not (Test-PclRunning $flavor)) { return $true }
+
+    if ($script:guiMode) {
+        if (-not (Show-ClosePclDialog)) {
+            $script:pclCloseCancelled = $true
+            return $false
+        }
+    } else {
+        Say ''
+        $answer = Read-Host ((T 'confirm_close_pcl') + ' [YES/NO]')
+        if ($answer -notmatch '^(?i:yes|y)$') {
+            $script:pclCloseCancelled = $true
+            Say '已取消。'
+            return $false
+        }
+    }
+
+    if ($script:guiMode -and $script:ui) {
+        Set-GuiStatus 'status_closing_pcl' 'muted' @()
+        try { [System.Windows.Forms.Application]::DoEvents() } catch { }
+    }
+    $closed = Close-PclProcesses $flavor
+    if (-not $closed) {
+        if ($script:guiMode) {
+            [void][System.Windows.Forms.MessageBox]::Show((T 'pcl_running'), (T 'pcl_running_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+        } else {
+            Say (T 'pcl_running')
+        }
+    }
+    return $closed
+}
+
 function Resolve-Target([string]$d, [string]$flavor) {
     if (-not $d) { return '' }
     $d = $d.Trim().Trim('"')
@@ -380,35 +577,91 @@ function Reset-UiCustomType([string]$dir, [string]$flavor) {
     try { Update-PclConfig $dir ([ordered]@{ 'UiCustomType' = '0' }) ([ordered]@{ 'UiCustomType' = '0' }) $false } catch { }
 }
 
-function Test-PclRunning {
-    return (@(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match '^(PCL|Plain Craft Launcher)' }).Count -gt 0)
+function Get-PclProcesses([string]$flavor = '') {
+    $all = @(Get-Process -ErrorAction SilentlyContinue)
+    if ($flavor -eq 'ce') {
+        return @($all | Where-Object { $_.ProcessName -match '^(PCL2_CE|PCLCE|PCL CE|Plain Craft Launcher CE)' })
+    }
+    if ($flavor -eq 'pcl') {
+        return @($all | Where-Object {
+            $_.ProcessName -match '^(PCL|PCL2|Plain Craft Launcher)' -and
+            $_.ProcessName -notmatch '^(PCL2_CE|PCLCE|PCL CE|Plain Craft Launcher CE)'
+        })
+    }
+    return @($all | Where-Object { $_.ProcessName -match '^(PCL|PCL2|Plain Craft Launcher)' })
 }
 
-function Wait-PclClosed {
-    if ($script:testMode) { return $true }
-    if ($script:guiMode) { return (-not (Test-PclRunning)) }
-    $p = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match '^(PCL|Plain Craft Launcher)' })
-    if ($p.Count -eq 0) { return $true }
-    Say 'PCL / PCL CE 正在运行，请先完全退出（安装需要写入它的设置文件）。'
-    Say '退出后本窗口会自动继续，最多等待 60 秒…'
-    for ($i = 0; $i -lt 120; $i++) {
-        Start-Sleep -Milliseconds 500
-        if (@(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match '^(PCL|Plain Craft Launcher)' }).Count -eq 0) { return $true }
+function Test-PclRunning([string]$flavor = '') {
+    return (@(Get-PclProcesses $flavor).Count -gt 0)
+}
+
+# Ask first, then close only the selected launcher.  Other launcher instances
+# (for example PCL CE while installing to PCL2) are deliberately left alone.
+function Close-PclProcesses([string]$flavor) {
+    $procs = @(Get-PclProcesses $flavor)
+    if ($procs.Count -eq 0) { return $true }
+    foreach ($p in $procs) {
+        $sent = $false
+        try {
+            if ($p.MainWindowHandle -ne 0) { $sent = [bool]$p.CloseMainWindow() }
+        } catch { }
+        if (-not $sent) {
+            try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch { }
+        }
     }
-    return $false
+    $deadline = (Get-Date).AddSeconds(8)
+    while ((Get-Date) -lt $deadline) {
+        if (-not (Test-PclRunning $flavor)) { return $true }
+        Start-Sleep -Milliseconds 200
+    }
+    foreach ($p in @(Get-PclProcesses $flavor)) {
+        try { Stop-Process -Id $p.Id -Force -ErrorAction Stop } catch { }
+    }
+    $deadline = (Get-Date).AddSeconds(4)
+    while ((Get-Date) -lt $deadline) {
+        if (-not (Test-PclRunning $flavor)) { return $true }
+        Start-Sleep -Milliseconds 200
+    }
+    return (-not (Test-PclRunning $flavor))
+}
+
+function Wait-PclClosed([string]$flavor = '') {
+    if ($script:testMode) { return $true }
+    if (-not (Test-PclRunning $flavor)) { return $true }
+    if ($script:guiMode) { return $false }
+    return (Confirm-ClosePcl $flavor)
 }
 
 function Stop-Watchers([string]$dir) {
     if ($script:testMode) { return }
     $me = $PID
+    $needle = $dir.TrimEnd('\')
     foreach ($p in @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue)) {
         if ($p.ProcessId -eq $me) { continue }
         $cl = [string]$p.CommandLine
-        if ($cl -and $cl.Contains('RefreshLog.ps1') -and $cl.Contains('-Watch') -and $cl.Contains($dir)) {
+        if ($cl -and
+            $cl.IndexOf('RefreshLog.ps1', [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
+            $cl.IndexOf('-Watch', [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
+            $cl.IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
             try { Stop-Process -Id $p.ProcessId -Force } catch { }
         }
     }
     Start-Sleep -Milliseconds 400
+}
+
+# The watcher also refreshes this key, but update it directly as well so a
+# missed old watcher (or a watcher that cannot start) can never leave the old
+# console-subsystem command in the logon entry after a successful install.
+function Set-WindowlessAutostart([string]$dir) {
+    if ($script:testMode -or $env:PCLTOOLS_NO_AUTOSTART) { return }
+    try {
+        $vbs = Join-Path $dir 'PCLHomeLaunch.vbs'
+        if (-not (Test-Path -LiteralPath $vbs)) { return }
+        $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+        $cmd = 'wscript.exe //B //Nologo "' + $vbs + '" watch'
+        Set-ItemProperty -Path $key -Name 'PCLCustomHomeWatch' -Value $cmd
+        Remove-ItemProperty -Path $key -Name 'PCLCustomHomeVideoWall' -ErrorAction SilentlyContinue
+    } catch { }
 }
 
 # ==== install / uninstall ====
@@ -419,10 +672,26 @@ function Get-Seg([string]$c, [string]$a, [string]$b) {
 }
 
 function Invoke-Install([string]$dir, [string]$flavor, [string]$lang = '') {
+    $script:incompatiblePcl = $false
+    $script:incompatiblePclVersion = ''
+    $script:pclCloseCancelled = $false
     $flavor = Normalize-Flavor $flavor
     if (-not $flavor) { $flavor = Get-FlavorForDir $dir }
     if (-not $flavor) { Die ('无法判断要安装到 PCL2 还是 PCL CE：' + $dir) }
-    if (-not (Wait-PclClosed)) { Die 'PCL 仍在运行，请退出 PCL / PCL CE 后再运行本安装器。' }
+
+    # Preflight only.  Nothing has been written yet: do not wait for PCL to
+    # close, stop a watcher, create a folder or touch the registry.  Returning
+    # here therefore rolls back this install attempt completely.
+    $versionState = Get-PclVersionState $dir $flavor
+    if ($versionState.Unsupported) {
+        Show-IncompatiblePcl $versionState
+        return
+    }
+
+    if (-not (Wait-PclClosed $flavor)) {
+        if ($script:pclCloseCancelled) { return }
+        Die 'PCL 仍在运行，请退出 PCL / PCL CE 后再运行本安装器。'
+    }
     if (-not $lang) { $lang = $script:homeLang }
     if (-not $lang) { $lang = Get-SystemGuiLanguage }
     Stop-Watchers $dir
@@ -435,7 +704,8 @@ function Invoke-Install([string]$dir, [string]$flavor, [string]$lang = '') {
     [IO.File]::WriteAllText((Join-Path $dir 'RefreshLog.ps1'), (Get-Seg $c 'PS1' 'PS2'), [Text.UTF8Encoding]::new($true))
     [IO.File]::WriteAllText((Join-Path $dir 'BgRefresh.ps1'), (Get-Seg $c 'PS2' 'PS3'), [Text.UTF8Encoding]::new($true))
     [IO.File]::WriteAllText((Join-Path $dir 'Egg.ps1'), (Get-Seg $c 'PS3' 'PS4'), [Text.UTF8Encoding]::new($true))
-    [IO.File]::WriteAllText((Join-Path $dir 'VideoWall.ps1'), (Get-Seg $c 'PS4' 'IMG'), [Text.UTF8Encoding]::new($true))
+    [IO.File]::WriteAllText((Join-Path $dir 'VideoWall.ps1'), (Get-Seg $c 'PS4' 'VBS'), [Text.UTF8Encoding]::new($true))
+    [IO.File]::WriteAllText((Join-Path $dir 'PCLHomeLaunch.vbs'), (Get-Seg $c 'VBS' 'IMG'), [Text.UTF8Encoding]::new($false))
     foreach ($old in @('InjectDll.ps1', 'InjectDll.lock')) {
         try { Remove-Item -LiteralPath (Join-Path $dir $old) -Force -ErrorAction SilentlyContinue } catch { }
     }
@@ -449,7 +719,10 @@ function Invoke-Install([string]$dir, [string]$flavor, [string]$lang = '') {
     $env:PCLTOOLS_NO_REFRESH = '1'
     try {
         if ($script:guiMode) {
-            & powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File (Join-Path $dir 'RefreshLog.ps1') $dir | Out-Null
+            # wscript.exe is a GUI-subsystem program; PCLHomeLaunch.vbs starts
+            # PowerShell with window style 0.  No console is created.
+            $refresh = Start-Process -FilePath 'wscript.exe' -ArgumentList ('//B //Nologo "' + (Join-Path $dir 'PCLHomeLaunch.vbs') + '" refresh') -WindowStyle Hidden -Wait -PassThru
+            if ($refresh.ExitCode -ne 0) { throw 'LogView.xaml 生成失败' }
         } else {
             & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $dir 'RefreshLog.ps1') $dir | Out-Null
         }
@@ -457,8 +730,9 @@ function Invoke-Install([string]$dir, [string]$flavor, [string]$lang = '') {
         Remove-Item Env:\PCLTOOLS_NO_REFRESH -ErrorAction SilentlyContinue
     }
     if (-not (Test-Path -LiteralPath (Join-Path $dir 'LogView.xaml'))) { throw 'LogView.xaml 生成失败' }
+    Set-WindowlessAutostart $dir
     if (-not $script:testMode -and -not $env:PCLTOOLS_NO_WATCH) {
-        Start-Process -FilePath 'powershell.exe' -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + (Join-Path $dir 'RefreshLog.ps1') + '" -Watch') -WindowStyle Hidden
+        Start-Process -FilePath 'wscript.exe' -ArgumentList ('//B //Nologo "' + (Join-Path $dir 'PCLHomeLaunch.vbs') + '" watch') -WindowStyle Hidden | Out-Null
     }
     Say ''
     Say ('已安装到：' + $dir)
@@ -470,19 +744,24 @@ function Invoke-Install([string]$dir, [string]$flavor, [string]$lang = '') {
 }
 
 function Invoke-Uninstall([string]$dir, [string]$flavor) {
+    $script:pclCloseCancelled = $false
     $flavor = Normalize-Flavor $flavor
+    if (-not $flavor) { $flavor = Get-FlavorForDir $dir }
     if (-not $script:testMode -and -not $script:guiMode) {
         $a = Read-Host ('确定要从 ' + $dir + ' 卸载自定义主页吗？输入 y 回车确认')
         if ($a -notmatch '^\s*y') { Say '已取消。'; return }
     }
-    if (-not (Wait-PclClosed)) { Die 'PCL 仍在运行，请退出 PCL / PCL CE 后再卸载。' }
+    if (-not (Wait-PclClosed $flavor)) {
+        if ($script:pclCloseCancelled) { return }
+        Die 'PCL 仍在运行，请退出 PCL / PCL CE 后再卸载。'
+    }
     Stop-Watchers $dir
     if (-not $script:testMode) {
         foreach ($n in @('PCLCustomHomeWatch', 'PCLCustomHomeVideoWall')) {
             try { Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name $n -ErrorAction SilentlyContinue } catch { }
         }
     }
-    foreach ($f in @('Custom.xaml', 'LogView.xaml', 'CustomTools.bat', 'RefreshLog.ps1', 'BgRefresh.ps1', 'Egg.ps1', 'VideoWall.ps1', 'CustomTools.log', 'VideoWall.ready', 'Pictures\CustomHomeBG.jpg', 'Pictures\videoframe_2546.png', 'Pictures\CustomHomeLock.png')) {
+    foreach ($f in @('Custom.xaml', 'LogView.xaml', 'CustomTools.bat', 'PCLHomeLaunch.vbs', 'RefreshLog.ps1', 'BgRefresh.ps1', 'Egg.ps1', 'VideoWall.ps1', 'CustomTools.log', 'VideoWall.ready', 'Pictures\CustomHomeBG.jpg', 'Pictures\videoframe_2546.png', 'Pictures\CustomHomeLock.png')) {
         try { Remove-Item -LiteralPath ($dir + '\' + $f) -Force -ErrorAction SilentlyContinue } catch { }
     }
     try { Remove-Item -LiteralPath ($dir + '\VideoWall') -Recurse -Force -ErrorAction SilentlyContinue } catch { }
@@ -534,6 +813,7 @@ $script:guiText = @{
         exit = 'Exit'
         status_ready = 'Choose a launcher and data folder.'
         status_detected = 'Detected: {0} · {1}'
+        status_folder_ready = 'Data folder ready: {0}'
         status_not_found = 'No PCL data folder found. Check the path.'
         status_switched = 'This folder belongs to {0}; switched automatically.'
         status_installing = 'Installing, please wait...'
@@ -547,6 +827,8 @@ $script:guiText = @{
         confirm_uninstall = "Remove the custom homepage from this folder?`n`n{0}`n`nThe launcher will return to its built-in homepage. Other UI settings are unchanged."
         pcl_running_title = 'Launcher is running'
         pcl_running = 'Fully exit PCL2 / PCL CE, then try again.'
+        confirm_close_pcl = "Do you want me to close it?"
+        status_closing_pcl = "Closing the selected launcher, please wait..."
         not_installed = 'The custom homepage is not installed in this folder.'
         select_target = 'Select a valid PCL data folder.'
         error_title = 'Installation failed'
@@ -561,7 +843,9 @@ $script:guiText = @{
         browse_desc_pcl = 'Select the PCL2 data folder (contains Setup.ini)'
         browse_desc_ce = 'Select the PCL CE data folder (contains config.v1.yml)'
         browse_desc_any = 'Select the PCL data folder (contains Setup.ini or config.v1.yml)'
-        footer = 'PCL Custom Homepage · v1.0 · 15 languages · only the selected launcher config is modified'
+        footer = 'PCL Custom Homepage · v1.3 · 15 languages · only the selected launcher config is modified'
+        incompatible_pcl = "Installing a custom homepage for this PCL version is no longer meaningful.`nNo changes have been made to your computer."
+        status_incompatible = "This PCL version is not supported. No changes were made."
         flavor_pcl = 'PCL2 (Original)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Language'
@@ -587,6 +871,7 @@ $script:guiText = @{
         exit = '退出'
         status_ready = '请选择启动器和数据文件夹。'
         status_detected = '已识别：{0} · {1}'
+        status_folder_ready = '数据文件夹已就绪：{0}'
         status_not_found = '未识别到 PCL 数据文件夹，请检查路径。'
         status_switched = '检测到该文件夹属于 {0}，已自动切换。'
         status_installing = '正在安装，请稍候...'
@@ -600,6 +885,8 @@ $script:guiText = @{
         confirm_uninstall = "确定要从以下文件夹卸载自定义主页吗？`n`n{0}`n`n卸载后启动器会恢复自带主页，其他界面设置保持不变。"
         pcl_running_title = '启动器正在运行'
         pcl_running = '请先完全退出 PCL2 / PCL CE，然后重试。'
+        confirm_close_pcl = "要不要帮你关闭"
+        status_closing_pcl = "正在关闭所选的启动器，请稍候..."
         not_installed = '该文件夹没有安装自定义主页。'
         select_target = '请选择有效的 PCL 数据文件夹。'
         error_title = '安装失败'
@@ -614,7 +901,9 @@ $script:guiText = @{
         browse_desc_pcl = '请选择 PCL2 的数据文件夹（包含 Setup.ini）'
         browse_desc_ce = '请选择 PCL CE 的数据文件夹（包含 config.v1.yml）'
         browse_desc_any = '请选择 PCL 数据文件夹（包含 Setup.ini 或 config.v1.yml）'
-        footer = 'PCL 自定义主页 · v1.0 · 15 种语言 · 仅修改所选启动器的配置'
+        footer = 'PCL 自定义主页 · v1.3 · 15 种语言 · 仅修改所选启动器的配置'
+        incompatible_pcl = "你这个版本的PCL安装主页已经没有意义了`n未对您的计算机进行更改"
+        status_incompatible = "不支持此 PCL 版本。未对计算机进行更改。"
         flavor_pcl = 'PCL2（原版）'
         flavor_ce = 'PCL CE'
         lang_caption = '语言'
@@ -640,6 +929,7 @@ $script:guiText = @{
         exit = '結束'
         status_ready = '請選擇啟動器和資料夾。'
         status_detected = '已辨識：{0} · {1}'
+        status_folder_ready = '資料夾已就緒：{0}'
         status_not_found = '找不到 PCL 資料夾，請檢查路徑。'
         status_switched = '偵測到資料夾屬於 {0}，已自動切換。'
         status_installing = '正在安裝，請稍候...'
@@ -653,6 +943,8 @@ $script:guiText = @{
         confirm_uninstall = "確定要從以下資料夾解除安裝自訂主頁嗎？`n`n{0}`n`n解除安裝後啟動器會恢復內建主頁，其他介面設定保持不變。"
         pcl_running_title = '啟動器正在執行'
         pcl_running = '請先完全結束 PCL2 / PCL CE，然後再試一次。'
+        confirm_close_pcl = "要不要幫你關閉？"
+        status_closing_pcl = "正在關閉所選的啟動器，請稍候..."
         not_installed = '此資料夾沒有安裝自訂主頁。'
         select_target = '請選擇有效的 PCL 資料夾。'
         error_title = '安裝失敗'
@@ -667,7 +959,9 @@ $script:guiText = @{
         browse_desc_pcl = '請選擇 PCL2 的資料夾（包含 Setup.ini）'
         browse_desc_ce = '請選擇 PCL CE 的資料夾（包含 config.v1.yml）'
         browse_desc_any = '請選擇 PCL 資料夾（包含 Setup.ini 或 config.v1.yml）'
-        footer = 'PCL 自訂主頁 · v1.0 · 15 種語言 · 僅修改所選啟動器的設定'
+        footer = 'PCL 自訂主頁 · v1.3 · 15 種語言 · 僅修改所選啟動器的設定'
+        incompatible_pcl = "你這個版本的 PCL 安裝主頁已經沒有意義了`n未對您的電腦進行任何變更"
+        status_incompatible = "不支援此 PCL 版本。未對電腦進行任何變更。"
         flavor_pcl = 'PCL2（原版）'
         flavor_ce = 'PCL CE'
         lang_caption = '語言'
@@ -693,6 +987,7 @@ $script:guiText = @{
         exit = '終了'
         status_ready = 'ランチャーとデータフォルダーを選択してください。'
         status_detected = '検出：{0} · {1}'
+        status_folder_ready = 'データフォルダーの準備ができました：{0}'
         status_not_found = 'PCL データフォルダーが見つかりません。パスを確認してください。'
         status_switched = 'このフォルダーは {0} のものです。自動的に切り替えました。'
         status_installing = 'インストール中です。お待ちください...'
@@ -706,6 +1001,8 @@ $script:guiText = @{
         confirm_uninstall = "次のフォルダーからカスタムホームページをアンインストールしますか？`n`n{0}`n`nランチャーは標準のホームページに戻ります。他の UI 設定は変更されません。"
         pcl_running_title = 'ランチャーが実行中です'
         pcl_running = 'PCL2 / PCL CE を完全に終了してから、もう一度お試しください。'
+        confirm_close_pcl = "閉じてもいいですか？"
+        status_closing_pcl = "選択したランチャーを終了しています。お待ちください..."
         not_installed = 'このフォルダーにはカスタムホームページがインストールされていません。'
         select_target = '有効な PCL データフォルダーを選択してください。'
         error_title = 'インストールに失敗しました'
@@ -720,7 +1017,9 @@ $script:guiText = @{
         browse_desc_pcl = 'PCL2 のデータフォルダーを選択（Setup.ini を含む）'
         browse_desc_ce = 'PCL CE のデータフォルダーを選択（config.v1.yml を含む）'
         browse_desc_any = 'PCL データフォルダーを選択（Setup.ini または config.v1.yml を含む）'
-        footer = 'PCL カスタムホームページ · v1.0 · 15 言語 · 選択したランチャーの設定のみ変更'
+        footer = 'PCL カスタムホームページ · v1.3 · 15 言語 · 選択したランチャーの設定のみ変更'
+        incompatible_pcl = "このバージョンの PCL では、カスタムホームページをインストールしても意味がありません。`nコンピューターには何も変更を加えていません。"
+        status_incompatible = "この PCL バージョンはサポートされていません。変更は行われていません。"
         flavor_pcl = 'PCL2（オリジナル）'
         flavor_ce = 'PCL CE'
         lang_caption = '言語'
@@ -746,6 +1045,7 @@ $script:guiText = @{
         exit = '종료'
         status_ready = '런처와 데이터 폴더를 선택하세요.'
         status_detected = '감지됨: {0} · {1}'
+        status_folder_ready = '데이터 폴더가 준비되었습니다: {0}'
         status_not_found = 'PCL 데이터 폴더를 찾을 수 없습니다. 경로를 확인하세요.'
         status_switched = '이 폴더는 {0}에 속합니다. 자동으로 전환했습니다.'
         status_installing = '설치하는 중입니다. 잠시만 기다려 주세요...'
@@ -759,6 +1059,8 @@ $script:guiText = @{
         confirm_uninstall = "다음 폴더에서 사용자 지정 홈페이지를 제거할까요?`n`n{0}`n`n런처는 기본 홈페이지로 돌아갑니다. 다른 UI 설정은 변경되지 않습니다."
         pcl_running_title = '런처가 실행 중입니다'
         pcl_running = 'PCL2 / PCL CE를 완전히 종료한 후 다시 시도하세요.'
+        confirm_close_pcl = "종료해 드릴까요?"
+        status_closing_pcl = "선택한 런처를 종료하는 중입니다. 잠시만 기다려 주세요..."
         not_installed = '이 폴더에는 사용자 지정 홈페이지가 설치되어 있지 않습니다.'
         select_target = '올바른 PCL 데이터 폴더를 선택하세요.'
         error_title = '설치 실패'
@@ -773,7 +1075,9 @@ $script:guiText = @{
         browse_desc_pcl = 'PCL2 데이터 폴더 선택 (Setup.ini 포함)'
         browse_desc_ce = 'PCL CE 데이터 폴더 선택 (config.v1.yml 포함)'
         browse_desc_any = 'PCL 데이터 폴더 선택 (Setup.ini 또는 config.v1.yml 포함)'
-        footer = 'PCL 사용자 지정 홈페이지 · v1.0 · 15개 언어 · 선택한 런처 설정만 수정'
+        footer = 'PCL 사용자 지정 홈페이지 · v1.3 · 15개 언어 · 선택한 런처 설정만 수정'
+        incompatible_pcl = "이 버전의 PCL에서는 사용자 지정 홈페이지를 설치해도 의미가 없습니다.`n컴퓨터에 아무런 변경도 적용하지 않았습니다."
+        status_incompatible = "이 PCL 버전은 지원되지 않습니다. 변경 사항은 없습니다."
         flavor_pcl = 'PCL2 (원본)'
         flavor_ce = 'PCL CE'
         lang_caption = '언어'
@@ -799,6 +1103,7 @@ $script:guiText = @{
         exit = 'Quitter'
         status_ready = 'Choisissez un lanceur et un dossier de données.'
         status_detected = 'Détecté : {0} · {1}'
+        status_folder_ready = 'Dossier de données prêt : {0}'
         status_not_found = 'Aucun dossier de données PCL trouvé. Vérifiez le chemin.'
         status_switched = 'Ce dossier appartient à {0} ; changement automatique.'
         status_installing = 'Installation en cours...'
@@ -812,6 +1117,8 @@ $script:guiText = @{
         confirm_uninstall = "Supprimer la page d''accueil personnalisée de ce dossier ?`n`n{0}`n`nLe lanceur retrouvera sa page d''accueil intégrée. Les autres réglages d''interface restent inchangés."
         pcl_running_title = 'Le lanceur est en cours d''exécution'
         pcl_running = 'Quittez complètement PCL2 / PCL CE, puis réessayez.'
+        confirm_close_pcl = "Voulez-vous que je le ferme ?"
+        status_closing_pcl = "Fermeture du lanceur sélectionné..."
         not_installed = 'La page d''accueil personnalisée n''est pas installée dans ce dossier.'
         select_target = 'Sélectionnez un dossier de données PCL valide.'
         error_title = 'Échec de l''installation'
@@ -826,7 +1133,9 @@ $script:guiText = @{
         browse_desc_pcl = 'Sélectionnez le dossier de données PCL2 (contient Setup.ini)'
         browse_desc_ce = 'Sélectionnez le dossier de données PCL CE (contient config.v1.yml)'
         browse_desc_any = 'Sélectionnez le dossier de données PCL (contient Setup.ini ou config.v1.yml)'
-        footer = 'Page d''accueil PCL · v1.0 · 15 langues · seul le profil du lanceur choisi est modifié'
+        footer = 'Page d''accueil PCL · v1.3 · 15 langues · seul le profil du lanceur choisi est modifié'
+        incompatible_pcl = "Installer une page d'accueil personnalisée pour cette version de PCL n'a plus de sens.`nAucune modification n'a été apportée à votre ordinateur."
+        status_incompatible = "Cette version de PCL n'est pas prise en charge. Aucune modification n'a été apportée."
         flavor_pcl = 'PCL2 (original)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Langue'
@@ -852,6 +1161,7 @@ $script:guiText = @{
         exit = 'Beenden'
         status_ready = 'Wähle einen Launcher und einen Datenordner.'
         status_detected = 'Erkannt: {0} · {1}'
+        status_folder_ready = 'Datenordner bereit: {0}'
         status_not_found = 'Kein PCL-Datenordner gefunden. Prüfe den Pfad.'
         status_switched = 'Dieser Ordner gehört zu {0}; automatisch umgeschaltet.'
         status_installing = 'Installation läuft, bitte warten...'
@@ -865,6 +1175,8 @@ $script:guiText = @{
         confirm_uninstall = "Die benutzerdefinierte Startseite aus diesem Ordner entfernen?`n`n{0}`n`nDer Launcher kehrt zu seiner integrierten Startseite zurück. Andere UI-Einstellungen bleiben unverändert."
         pcl_running_title = 'Launcher läuft'
         pcl_running = 'Beende PCL2 / PCL CE vollständig und versuche es erneut.'
+        confirm_close_pcl = "Soll ich es für dich schließen?"
+        status_closing_pcl = "Der ausgewählte Launcher wird geschlossen..."
         not_installed = 'In diesem Ordner ist keine benutzerdefinierte Startseite installiert.'
         select_target = 'Wähle einen gültigen PCL-Datenordner.'
         error_title = 'Installation fehlgeschlagen'
@@ -879,7 +1191,9 @@ $script:guiText = @{
         browse_desc_pcl = 'PCL2-Datenordner auswählen (enthält Setup.ini)'
         browse_desc_ce = 'PCL CE-Datenordner auswählen (enthält config.v1.yml)'
         browse_desc_any = 'PCL-Datenordner auswählen (enthält Setup.ini oder config.v1.yml)'
-        footer = 'PCL Startseite · v1.0 · 15 Sprachen · nur die Konfiguration des gewählten Launchers wird geändert'
+        footer = 'PCL Startseite · v1.3 · 15 Sprachen · nur die Konfiguration des gewählten Launchers wird geändert'
+        incompatible_pcl = "Das Installieren einer benutzerdefinierten Startseite für diese PCL-Version ist nicht mehr sinnvoll.`nEs wurden keine Änderungen an Ihrem Computer vorgenommen."
+        status_incompatible = "Diese PCL-Version wird nicht unterstützt. Es wurden keine Änderungen vorgenommen."
         flavor_pcl = 'PCL2 (Original)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Sprache'
@@ -905,6 +1219,7 @@ $script:guiText = @{
         exit = 'Salir'
         status_ready = 'Elige un lanzador y una carpeta de datos.'
         status_detected = 'Detectado: {0} · {1}'
+        status_folder_ready = 'Carpeta de datos lista: {0}'
         status_not_found = 'No se encontró una carpeta de datos de PCL. Comprueba la ruta.'
         status_switched = 'Esta carpeta pertenece a {0}; se cambió automáticamente.'
         status_installing = 'Instalando, espera...'
@@ -918,6 +1233,8 @@ $script:guiText = @{
         confirm_uninstall = "¿Quitar la página de inicio personalizada de esta carpeta?`n`n{0}`n`nEl lanzador volverá a su página de inicio integrada. Los demás ajustes de la interfaz no cambian."
         pcl_running_title = 'El lanzador está en ejecución'
         pcl_running = 'Cierra completamente PCL2 / PCL CE y vuelve a intentarlo.'
+        confirm_close_pcl = "¿Quieres que lo cierre?"
+        status_closing_pcl = "Cerrando el lanzador seleccionado..."
         not_installed = 'La página de inicio personalizada no está instalada en esta carpeta.'
         select_target = 'Selecciona una carpeta de datos de PCL válida.'
         error_title = 'Error de instalación'
@@ -932,7 +1249,9 @@ $script:guiText = @{
         browse_desc_pcl = 'Selecciona la carpeta de datos de PCL2 (contiene Setup.ini)'
         browse_desc_ce = 'Selecciona la carpeta de datos de PCL CE (contiene config.v1.yml)'
         browse_desc_any = 'Selecciona la carpeta de datos de PCL (contiene Setup.ini o config.v1.yml)'
-        footer = 'Página de inicio PCL · v1.0 · 15 idiomas · solo se modifica la configuración del lanzador elegido'
+        footer = 'Página de inicio PCL · v1.3 · 15 idiomas · solo se modifica la configuración del lanzador elegido'
+        incompatible_pcl = "Instalar una página de inicio personalizada para esta versión de PCL ya no tiene sentido.`nNo se ha realizado ningún cambio en su equipo."
+        status_incompatible = "Esta versión de PCL no es compatible. No se realizó ningún cambio."
         flavor_pcl = 'PCL2 (original)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Idioma'
@@ -958,6 +1277,7 @@ $script:guiText = @{
         exit = 'Sair'
         status_ready = 'Escolha um launcher e uma pasta de dados.'
         status_detected = 'Detectado: {0} · {1}'
+        status_folder_ready = 'Pasta de dados pronta: {0}'
         status_not_found = 'Nenhuma pasta de dados do PCL encontrada. Verifique o caminho.'
         status_switched = 'Esta pasta pertence ao {0}; alterado automaticamente.'
         status_installing = 'Instalando, aguarde...'
@@ -971,6 +1291,8 @@ $script:guiText = @{
         confirm_uninstall = "Remover a página inicial personalizada desta pasta?`n`n{0}`n`nO launcher voltará à página inicial integrada. As outras configurações de interface permanecem iguais."
         pcl_running_title = 'O launcher está em execução'
         pcl_running = 'Feche completamente o PCL2 / PCL CE e tente novamente.'
+        confirm_close_pcl = "Quer que eu o feche?"
+        status_closing_pcl = "Fechando o launcher selecionado..."
         not_installed = 'A página inicial personalizada não está instalada nesta pasta.'
         select_target = 'Selecione uma pasta de dados válida do PCL.'
         error_title = 'Falha na instalação'
@@ -985,7 +1307,9 @@ $script:guiText = @{
         browse_desc_pcl = 'Selecione a pasta de dados do PCL2 (contém Setup.ini)'
         browse_desc_ce = 'Selecione a pasta de dados do PCL CE (contém config.v1.yml)'
         browse_desc_any = 'Selecione a pasta de dados do PCL (contém Setup.ini ou config.v1.yml)'
-        footer = 'Página inicial do PCL · v1.0 · 15 idiomas · apenas a configuração do launcher selecionado é alterada'
+        footer = 'Página inicial do PCL · v1.3 · 15 idiomas · apenas a configuração do launcher selecionado é alterada'
+        incompatible_pcl = "Instalar uma página inicial personalizada para esta versão do PCL não faz mais sentido.`nNenhuma alteração foi feita no seu computador."
+        status_incompatible = "Esta versão do PCL não é compatível. Nenhuma alteração foi feita."
         flavor_pcl = 'PCL2 (original)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Idioma'
@@ -1011,6 +1335,7 @@ $script:guiText = @{
         exit = 'Выход'
         status_ready = 'Выберите лаунчер и папку данных.'
         status_detected = 'Определено: {0} · {1}'
+        status_folder_ready = 'Папка данных готова: {0}'
         status_not_found = 'Папка данных PCL не найдена. Проверьте путь.'
         status_switched = 'Эта папка относится к {0}; выполнено автоматическое переключение.'
         status_installing = 'Установка, подождите...'
@@ -1024,6 +1349,8 @@ $script:guiText = @{
         confirm_uninstall = "Удалить пользовательскую домашнюю страницу из этой папки?`n`n{0}`n`nЛаунчер вернётся к встроенной домашней странице. Остальные настройки интерфейса не изменятся."
         pcl_running_title = 'Лаунчер запущен'
         pcl_running = 'Полностью закройте PCL2 / PCL CE и повторите попытку.'
+        confirm_close_pcl = "Закрыть его за вас?"
+        status_closing_pcl = "Закрытие выбранного лаунчера..."
         not_installed = 'Пользовательская домашняя страница не установлена в этой папке.'
         select_target = 'Выберите правильную папку данных PCL.'
         error_title = 'Ошибка установки'
@@ -1038,7 +1365,9 @@ $script:guiText = @{
         browse_desc_pcl = 'Выберите папку данных PCL2 (содержит Setup.ini)'
         browse_desc_ce = 'Выберите папку данных PCL CE (содержит config.v1.yml)'
         browse_desc_any = 'Выберите папку данных PCL (содержит Setup.ini или config.v1.yml)'
-        footer = 'Домашняя страница PCL · v1.0 · 15 языков · изменяется только конфигурация выбранного лаунчера'
+        footer = 'Домашняя страница PCL · v1.3 · 15 языков · изменяется только конфигурация выбранного лаунчера'
+        incompatible_pcl = "Устанавливать пользовательскую главную страницу для этой версии PCL больше не имеет смысла.`nВаш компьютер не был изменён."
+        status_incompatible = "Эта версия PCL не поддерживается. Изменения не вносились."
         flavor_pcl = 'PCL2 (оригинал)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Язык'
@@ -1064,6 +1393,7 @@ $script:guiText = @{
         exit = 'Esci'
         status_ready = 'Scegli un launcher e una cartella dati.'
         status_detected = 'Rilevato: {0} · {1}'
+        status_folder_ready = 'Cartella dati pronta: {0}'
         status_not_found = 'Nessuna cartella dati PCL trovata. Controlla il percorso.'
         status_switched = 'Questa cartella appartiene a {0}; cambio automatico.'
         status_installing = 'Installazione in corso...'
@@ -1077,6 +1407,8 @@ $script:guiText = @{
         confirm_uninstall = "Rimuovere la homepage personalizzata da questa cartella?`n`n{0}`n`nIl launcher tornerà alla homepage integrata. Le altre impostazioni dell''interfaccia restano invariate."
         pcl_running_title = 'Il launcher è in esecuzione'
         pcl_running = 'Chiudi completamente PCL2 / PCL CE, poi riprova.'
+        confirm_close_pcl = "Vuoi che lo chiuda?"
+        status_closing_pcl = "Chiusura del launcher selezionato..."
         not_installed = 'La homepage personalizzata non è installata in questa cartella.'
         select_target = 'Seleziona una cartella dati PCL valida.'
         error_title = 'Installazione non riuscita'
@@ -1091,7 +1423,9 @@ $script:guiText = @{
         browse_desc_pcl = 'Seleziona la cartella dati PCL2 (contiene Setup.ini)'
         browse_desc_ce = 'Seleziona la cartella dati PCL CE (contiene config.v1.yml)'
         browse_desc_any = 'Seleziona la cartella dati PCL (contiene Setup.ini o config.v1.yml)'
-        footer = 'Homepage PCL · v1.0 · 15 lingue · viene modificata solo la configurazione del launcher scelto'
+        footer = 'Homepage PCL · v1.3 · 15 lingue · viene modificata solo la configurazione del launcher scelto'
+        incompatible_pcl = "Installare una homepage personalizzata per questa versione di PCL non ha più senso.`nNessuna modifica è stata apportata al computer."
+        status_incompatible = "Questa versione di PCL non è supportata. Nessuna modifica è stata apportata."
         flavor_pcl = 'PCL2 (originale)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Lingua'
@@ -1117,6 +1451,7 @@ $script:guiText = @{
         exit = 'Afsluiten'
         status_ready = 'Kies een launcher en een gegevensmap.'
         status_detected = 'Gedetecteerd: {0} · {1}'
+        status_folder_ready = 'Gegevensmap gereed: {0}'
         status_not_found = 'Geen PCL-gegevensmap gevonden. Controleer het pad.'
         status_switched = 'Deze map hoort bij {0}; automatisch overgeschakeld.'
         status_installing = 'Bezig met installeren...'
@@ -1130,6 +1465,8 @@ $script:guiText = @{
         confirm_uninstall = "De aangepaste startpagina uit deze map verwijderen?`n`n{0}`n`nDe launcher keert terug naar de ingebouwde startpagina. Andere UI-instellingen blijven ongewijzigd."
         pcl_running_title = 'Launcher is actief'
         pcl_running = 'Sluit PCL2 / PCL CE volledig af en probeer het opnieuw.'
+        confirm_close_pcl = "Wil je dat ik het sluit?"
+        status_closing_pcl = "De geselecteerde launcher wordt gesloten..."
         not_installed = 'De aangepaste startpagina is niet in deze map geïnstalleerd.'
         select_target = 'Selecteer een geldige PCL-gegevensmap.'
         error_title = 'Installatie mislukt'
@@ -1144,7 +1481,9 @@ $script:guiText = @{
         browse_desc_pcl = 'Selecteer de PCL2-gegevensmap (bevat Setup.ini)'
         browse_desc_ce = 'Selecteer de PCL CE-gegevensmap (bevat config.v1.yml)'
         browse_desc_any = 'Selecteer de PCL-gegevensmap (bevat Setup.ini of config.v1.yml)'
-        footer = 'PCL startpagina · v1.0 · 15 talen · alleen de configuratie van de gekozen launcher wordt gewijzigd'
+        footer = 'PCL startpagina · v1.3 · 15 talen · alleen de configuratie van de gekozen launcher wordt gewijzigd'
+        incompatible_pcl = "Een aangepaste startpagina installeren voor deze PCL-versie heeft geen zin meer.`nEr zijn geen wijzigingen aan je computer aangebracht."
+        status_incompatible = "Deze PCL-versie wordt niet ondersteund. Er zijn geen wijzigingen aangebracht."
         flavor_pcl = 'PCL2 (origineel)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Taal'
@@ -1170,6 +1509,7 @@ $script:guiText = @{
         exit = 'Zamknij'
         status_ready = 'Wybierz launcher i folder danych.'
         status_detected = 'Wykryto: {0} · {1}'
+        status_folder_ready = 'Folder danych jest gotowy: {0}'
         status_not_found = 'Nie znaleziono folderu danych PCL. Sprawdź ścieżkę.'
         status_switched = 'Ten folder należy do {0}; przełączono automatycznie.'
         status_installing = 'Trwa instalacja, czekaj...'
@@ -1183,6 +1523,8 @@ $script:guiText = @{
         confirm_uninstall = "Usunąć niestandardową stronę główną z tego folderu?`n`n{0}`n`nLauncher wróci do wbudowanej strony głównej. Pozostałe ustawienia interfejsu pozostaną bez zmian."
         pcl_running_title = 'Launcher jest uruchomiony'
         pcl_running = 'Całkowicie zamknij PCL2 / PCL CE i spróbuj ponownie.'
+        confirm_close_pcl = "Czy mam go zamknąć?"
+        status_closing_pcl = "Zamykanie wybranego launchera..."
         not_installed = 'Niestandardowa strona główna nie jest zainstalowana w tym folderze.'
         select_target = 'Wybierz prawidłowy folder danych PCL.'
         error_title = 'Instalacja nie powiodła się'
@@ -1197,7 +1539,9 @@ $script:guiText = @{
         browse_desc_pcl = 'Wybierz folder danych PCL2 (zawiera Setup.ini)'
         browse_desc_ce = 'Wybierz folder danych PCL CE (zawiera config.v1.yml)'
         browse_desc_any = 'Wybierz folder danych PCL (zawiera Setup.ini lub config.v1.yml)'
-        footer = 'Strona główna PCL · v1.0 · 15 języków · zmieniana jest tylko konfiguracja wybranego launchera'
+        footer = 'Strona główna PCL · v1.3 · 15 języków · zmieniana jest tylko konfiguracja wybranego launchera'
+        incompatible_pcl = "Instalowanie niestandardowej strony głównej dla tej wersji PCL nie ma już sensu.`nNie wprowadzono żadnych zmian na Twoim komputerze."
+        status_incompatible = "Ta wersja PCL nie jest obsługiwana. Nie wprowadzono żadnych zmian."
         flavor_pcl = 'PCL2 (oryginalny)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Język'
@@ -1223,6 +1567,7 @@ $script:guiText = @{
         exit = 'Çıkış'
         status_ready = 'Bir başlatıcı ve veri klasörü seçin.'
         status_detected = 'Algılandı: {0} · {1}'
+        status_folder_ready = 'Veri klasörü hazır: {0}'
         status_not_found = 'PCL veri klasörü bulunamadı. Yolu kontrol edin.'
         status_switched = 'Bu klasör {0} ait; otomatik olarak geçildi.'
         status_installing = 'Kuruluyor, lütfen bekleyin...'
@@ -1236,6 +1581,8 @@ $script:guiText = @{
         confirm_uninstall = "Özel ana sayfa bu klasörden kaldırılsın mı?`n`n{0}`n`nBaşlatıcı yerleşik ana sayfasına döner. Diğer arayüz ayarları değişmez."
         pcl_running_title = 'Başlatıcı çalışıyor'
         pcl_running = 'PCL2 / PCL CE''yi tamamen kapatıp tekrar deneyin.'
+        confirm_close_pcl = "Sizin için kapatayım mı?"
+        status_closing_pcl = "Seçili başlatıcı kapatılıyor..."
         not_installed = 'Bu klasörde özel ana sayfa kurulu değil.'
         select_target = 'Geçerli bir PCL veri klasörü seçin.'
         error_title = 'Kurulum başarısız'
@@ -1250,7 +1597,9 @@ $script:guiText = @{
         browse_desc_pcl = 'PCL2 veri klasörünü seçin (Setup.ini içerir)'
         browse_desc_ce = 'PCL CE veri klasörünü seçin (config.v1.yml içerir)'
         browse_desc_any = 'PCL veri klasörünü seçin (Setup.ini veya config.v1.yml içerir)'
-        footer = 'PCL Ana Sayfa · v1.0 · 15 dil · yalnızca seçilen başlatıcının yapılandırması değiştirilir'
+        footer = 'PCL Ana Sayfa · v1.3 · 15 dil · yalnızca seçilen başlatıcının yapılandırması değiştirilir'
+        incompatible_pcl = "Bu PCL sürümü için özel ana sayfa yüklemek artık anlamsız.`nBilgisayarınızda hiçbir değişiklik yapılmadı."
+        status_incompatible = "Bu PCL sürümü desteklenmiyor. Hiçbir değişiklik yapılmadı."
         flavor_pcl = 'PCL2 (Orijinal)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Dil'
@@ -1276,6 +1625,7 @@ $script:guiText = @{
         exit = 'Thoát'
         status_ready = 'Chọn trình khởi chạy và thư mục dữ liệu.'
         status_detected = 'Đã phát hiện: {0} · {1}'
+        status_folder_ready = 'Thư mục dữ liệu đã sẵn sàng: {0}'
         status_not_found = 'Không tìm thấy thư mục dữ liệu PCL. Kiểm tra đường dẫn.'
         status_switched = 'Thư mục này thuộc {0}; đã tự động chuyển.'
         status_installing = 'Đang cài đặt, vui lòng chờ...'
@@ -1289,6 +1639,8 @@ $script:guiText = @{
         confirm_uninstall = "Gỡ trang chủ tùy chỉnh khỏi thư mục này?`n`n{0}`n`nTrình khởi chạy sẽ trở về trang chủ mặc định. Các cài đặt giao diện khác không thay đổi."
         pcl_running_title = 'Trình khởi chạy đang chạy'
         pcl_running = 'Hãy thoát hoàn toàn PCL2 / PCL CE rồi thử lại.'
+        confirm_close_pcl = "Bạn có muốn tôi đóng nó không?"
+        status_closing_pcl = "Đang đóng trình khởi chạy đã chọn..."
         not_installed = 'Trang chủ tùy chỉnh chưa được cài đặt trong thư mục này.'
         select_target = 'Chọn một thư mục dữ liệu PCL hợp lệ.'
         error_title = 'Cài đặt thất bại'
@@ -1303,7 +1655,9 @@ $script:guiText = @{
         browse_desc_pcl = 'Chọn thư mục dữ liệu PCL2 (chứa Setup.ini)'
         browse_desc_ce = 'Chọn thư mục dữ liệu PCL CE (chứa config.v1.yml)'
         browse_desc_any = 'Chọn thư mục dữ liệu PCL (chứa Setup.ini hoặc config.v1.yml)'
-        footer = 'Trang chủ PCL · v1.0 · 15 ngôn ngữ · chỉ sửa cấu hình của trình khởi chạy đã chọn'
+        footer = 'Trang chủ PCL · v1.3 · 15 ngôn ngữ · chỉ sửa cấu hình của trình khởi chạy đã chọn'
+        incompatible_pcl = "Cài đặt trang chủ tùy chỉnh cho phiên bản PCL này không còn ý nghĩa nữa.`nKhông có thay đổi nào được thực hiện trên máy tính của bạn."
+        status_incompatible = "Phiên bản PCL này không được hỗ trợ. Không có thay đổi nào được thực hiện."
         flavor_pcl = 'PCL2 (gốc)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Ngôn ngữ'
@@ -1821,10 +2175,10 @@ function Select-GuiFlavor([string]$flavor, [switch]$NoRefresh) {
     } finally {
         $script:guiSelectingFlavor = $false
     }
-    if (-not $NoRefresh) { Update-GuiTargetState }
+    if (-not $NoRefresh) { Update-GuiTargetState -DeferFlavorSwitch }
 }
 
-function Update-GuiTargetState {
+function Update-GuiTargetState([switch]$DeferFlavorSwitch) {
     if (-not $script:ui -or $script:guiBusy) { return }
     $raw = ([string]$script:ui.pathBox.Text).Trim().Trim('"')
     if (-not $raw) {
@@ -1842,7 +2196,7 @@ function Update-GuiTargetState {
         if ($auto) {
             $detected = Get-FlavorForDir $auto
             if ($detected) {
-                if ($detected -ne $selected) {
+                if ($detected -ne $selected -and -not $DeferFlavorSwitch) {
                     Select-GuiFlavor $detected -NoRefresh
                     $selected = $detected
                     $switched = $true
@@ -1859,7 +2213,7 @@ function Update-GuiTargetState {
     }
 
     $detected = Get-FlavorForDir $resolved
-    if ($detected -and $detected -ne $selected) {
+    if ($detected -and $detected -ne $selected -and -not $DeferFlavorSwitch) {
         Select-GuiFlavor $detected -NoRefresh
         $selected = $detected
         $switched = $true
@@ -1868,6 +2222,8 @@ function Update-GuiTargetState {
     if ($script:ui.pathBox.Text -ne $resolved) { $script:ui.pathBox.Text = $resolved }
     if ($switched) {
         Set-GuiStatus 'status_switched' 'warning' @((Get-GuiText ('flavor_' + $selected)))
+    } elseif ($DeferFlavorSwitch) {
+        Set-GuiStatus 'status_folder_ready' 'muted' @($resolved)
     } else {
         Set-GuiStatus 'status_detected' 'success' @((Get-GuiText ('flavor_' + $selected)), $resolved)
     }
@@ -1954,7 +2310,7 @@ function Browse-GuiFolder {
     }
     if ($dlg.ShowDialog($script:ui.form) -eq [System.Windows.Forms.DialogResult]::OK) {
         $script:ui.pathBox.Text = $dlg.SelectedPath
-        Update-GuiTargetState
+        Update-GuiTargetState -DeferFlavorSwitch
     }
 }
 
@@ -1966,9 +2322,19 @@ function Install-Gui {
         [void][System.Windows.Forms.MessageBox]::Show((T 'select_target'), (T 'app_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
         return
     }
-    if (Test-PclRunning) {
-        [void][System.Windows.Forms.MessageBox]::Show((T 'pcl_running'), (T 'pcl_running_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+
+    $flavor = Get-GuiSelectedFlavor
+    $versionState = Get-PclVersionState $target $flavor
+    if ($versionState.Unsupported) {
+        Show-IncompatiblePcl $versionState
+        Set-GuiStatus 'status_incompatible' 'warning' @()
         return
+    }
+
+    if (Test-PclRunning $flavor) {
+        $closed = Confirm-ClosePcl $flavor
+        Update-GuiTargetState
+        if (-not $closed) { return }
     }
     if (Test-Path -LiteralPath ($target + '\Custom.xaml')) {
         $r = [System.Windows.Forms.MessageBox]::Show((T 'confirm_overwrite'), (T 'confirm_overwrite_title'), [System.Windows.Forms.MessageBoxButtons]::YesNoCancel, [System.Windows.Forms.MessageBoxIcon]::Question)
@@ -1979,12 +2345,15 @@ function Install-Gui {
         }
     }
 
-    $flavor = Get-GuiSelectedFlavor
     Set-GuiBusy $true
     Set-GuiStatus 'status_installing' 'muted' @()
     $ok = $false
     try {
         Invoke-Install $target $flavor $script:guiLang
+        if ($script:incompatiblePcl) {
+            Set-GuiStatus 'status_incompatible' 'warning' @()
+            return
+        }
         Set-GuiStatus 'status_installed' 'success' @($target)
         $text = (T 'done_install').Replace('{0}', $target)
         [void][System.Windows.Forms.MessageBox]::Show($text, (T 'done_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
@@ -2011,9 +2380,11 @@ function Uninstall-Gui([switch]$Confirmed) {
         [void][System.Windows.Forms.MessageBox]::Show((T 'not_installed'), (T 'app_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
         return
     }
-    if (Test-PclRunning) {
-        [void][System.Windows.Forms.MessageBox]::Show((T 'pcl_running'), (T 'pcl_running_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
-        return
+    $flavor = Get-GuiSelectedFlavor
+    if (Test-PclRunning $flavor) {
+        $closed = Confirm-ClosePcl $flavor
+        Update-GuiTargetState
+        if (-not $closed) { return }
     }
     if (-not $Confirmed) {
         $text = (T 'confirm_uninstall').Replace('{0}', $target)
@@ -2021,7 +2392,6 @@ function Uninstall-Gui([switch]$Confirmed) {
         if ($r -ne [System.Windows.Forms.DialogResult]::Yes) { return }
     }
 
-    $flavor = Get-GuiSelectedFlavor
     Set-GuiBusy $true
     Set-GuiStatus 'status_uninstalling' 'muted' @()
     $ok = $false
@@ -2293,7 +2663,7 @@ function Show-InstallerGui {
         param($s, $e)
         if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Enter) {
             $e.SuppressKeyPress = $true
-            Update-GuiTargetState
+            Update-GuiTargetState -DeferFlavorSwitch
         }
     })
     $form.Controls.Add($pathBox)
@@ -2309,7 +2679,7 @@ function Show-InstallerGui {
     $detectButton = New-GuiButton '' 618 352 110 30 $ui.colors.Card $ui.colors.Text $hintFont
     $detectButton.FlatAppearance.BorderSize = 1
     $detectButton.FlatAppearance.BorderColor = $ui.colors.Border
-    $detectButton.Add_Click({ Update-GuiTargetState })
+    $detectButton.Add_Click({ Update-GuiTargetState -DeferFlavorSwitch })
     $form.Controls.Add($detectButton)
     $script:ui.detectButton = $detectButton
 
@@ -2439,6 +2809,16 @@ try {
         End-Pause
         exit 0
     }
+
+    # Same preflight as the GUI: reject an unsupported launcher before the
+    # overwrite prompt, before waiting for PCL to close and before any writes.
+    $versionState = Get-PclVersionState $target $script:flavor
+    if ($versionState.Unsupported) {
+        Show-IncompatiblePcl $versionState
+        End-Pause
+        exit 0
+    }
+
     if (-not $script:testMode) {
         $interactive = $true
         try { if ([Console]::IsInputRedirected) { $interactive = $false } } catch { }
@@ -2451,6 +2831,7 @@ try {
         }
     }
     Invoke-Install $target $script:flavor
+    if ($script:incompatiblePcl) { End-Pause; exit 0 }
     End-Pause
     exit 0
 } catch {

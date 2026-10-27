@@ -1,7 +1,17 @@
 PCL 自定义主页 · 一键安装包（PCL2 / PCL CE 可选）
 
+【兼容性】
+- 仅支持 PCL2 / PCL CE 2.99.0.0 及更早版本（2.99.0.0 本身仍可用）。
+- 如果启动器版本高于 2.99.0.0，安装器会提示：
+  “你这个版本的PCL安装主页已经没有意义了
+   未对您的计算机进行更改”
+  并且不会写入任何文件、配置或开机自启项；本次安装尝试会直接撤销。
+- 已安装旧主页的用户仍可手动卸载；卸载后启动器会恢复自带主页。
+
 【安装】
 1. 完全退出 PCL2 或 PCL CE（安装会写入它的设置文件；安装器也会检查并提示）。
+   如果忘记退出，安装器会询问是否帮你关闭：选 YES 只关闭当前选择的
+   PCL2 或 PCL CE，选 NO 取消本次安装，不会修改任何内容。
 2. 双击 PCL主页安装[支持CE].exe。
 3. 在窗口右上角选择语言。界面和主页会同时使用该语言，例如选择 English，
    PCL / PCL CE 中显示的也是英文；选择中文也一样。
@@ -10,7 +20,9 @@ PCL 自定义主页 · 一键安装包（PCL2 / PCL CE 可选）
 5. 选择对应的数据文件夹：
    - PCL2：包含 Setup.ini 的 PCL 文件夹；
    - PCL CE：包含 config.v1.yml 的 PCL 文件夹。
-   通常在启动器 exe 旁边；直接选启动器根目录也可以，安装器会自动识别。
+   通常在启动器 exe 旁边；直接选启动器根目录也可以。
+   选择文件夹或点“检测”时只检查路径；点击“安装”后才自动识别并选中
+   PCL2 / PCL CE（两种都支持），不会提前切换。
 6. 点击“安装”。如果该文件夹已经安装过，可以选“覆盖安装”或“卸载”。
 7. 装完后打开对应的启动器就能看到新主页；如果启动器已经开着，按 F5 刷新或重开。
 
@@ -22,6 +34,8 @@ Português (Brasil)、Русский、Italiano、Nederlands、Polski、Türkçe
 
 【卸载】
 在安装器中选择对应启动器和数据文件夹，点击“卸载”即可。
+卸载时如果对应启动器正在运行，也会询问是否帮你关闭；YES 只关闭当前
+选择的启动器，NO 取消卸载。
 也可以命令行运行：
   "PCL主页安装[支持CE].exe" uninstall "D:\PCL-CE\PCL"
 
@@ -31,7 +45,7 @@ Português (Brasil)、Русский、Italiano、Nederlands、Polski、Türkçe
   "PCL主页安装[支持CE].exe" pcl "D:\PCL"
   "PCL主页安装[支持CE].exe" ce "D:\PCL-CE"
 pcl = PCL2（原版），ce = PCL CE；省略文件夹时会弹出选择框。
-带参数运行时会自动打开命令行窗口，方便查看输出。
+带参数运行时会自动打开命令行窗口，方便查看输出；只要图形界面时不要带参数。
 命令行默认跟随 Windows 显示语言；也可以先用环境变量指定主页语言：
   set PCLHOME_LANG=ja
   "PCL主页安装[支持CE].exe" ce "D:\PCL-CE"
@@ -39,10 +53,17 @@ PCLHOME_LANG 支持 zh、zh-CN、zh-TW、en、ja、ko、fr、de、es、pt、pt-B
 it、nl、pl、tr、vi 等写法。
 
 【说明】
+- 安装器、开机自启、主页按钮、日志刷新和彩蛋都不会弹出命令行窗口。
+  安装后会写入无窗口启动器 PCLHomeLaunch.vbs，请不要删除它。
+- 只有带参数运行命令行安装/卸载时才会显示命令行窗口，方便查看输出；
+  双击图形界面安装器不会显示。
+- 如果之前装过旧版，重新安装一次即可把开机自启项更新为无窗口方式。
 - 安装前必须选择 PCL2 或 PCL CE；安装器只修改所选启动器的配置
   （Setup.ini 或 config.v1.yml），不会顺带改另一个。
 - PCL2 和 PCL CE 安装的是同一个主页页面，只是数据文件夹和配置格式不同。
-- 选错启动器类型时，安装器会提示该文件夹不匹配，并让你重新选择。
+- 选择文件夹或点“检测”时只检查路径；点击“安装”后才会自动识别并选中
+  PCL2 / PCL CE（两种都支持），不会提前切换。
+- 关闭询问只显示“要不要帮你关闭”，不附加括号说明。
 - PCL CE 会额外写入 HintCustomCommand: true，避免第一次点击主页按钮时弹出命令确认框。
 - 安装会同时调整启动器的透明度、背景、Logo 等界面设置以获得主题效果；
   卸载时会把主页开关恢复为默认，其他界面设置保持不变。
@@ -53,8 +74,20 @@ it、nl、pl、tr、vi 等写法。
 ============================================================
 PCL Custom Homepage - One-click Installer (PCL2 / PCL CE)
 
+[Compatibility]
+- Supports PCL2 / PCL CE 2.99.0.0 and earlier only (2.99.0.0 itself is still supported).
+- If the launcher is newer than 2.99.0.0, the installer shows:
+  "Installing a custom homepage for this PCL version is no longer meaningful.
+   No changes have been made to your computer."
+  It writes no files, config or startup entries; the install attempt is cancelled.
+- If an older custom homepage is already installed, you can still uninstall it
+  manually; uninstalling restores the launcher's built-in homepage.
+
 [Install]
 1. Fully exit PCL2 or PCL CE first. The installer writes to its settings file.
+   If it is still running, the installer asks whether to close it: YES closes
+   only the currently selected PCL2 or PCL CE; NO cancels the install without
+   changing anything.
 2. Double-click PCL主页安装[支持CE].exe.
 3. Choose a language at the top-right. The installer UI and the homepage use
    the same language: choosing English shows English text in PCL / PCL CE;
@@ -65,7 +98,8 @@ PCL Custom Homepage - One-click Installer (PCL2 / PCL CE)
    - PCL2: the PCL folder containing Setup.ini.
    - PCL CE: the PCL folder containing config.v1.yml.
    It is usually next to the launcher exe. You can also select the launcher
-   root folder; the installer detects the correct data folder automatically.
+   root folder. Selecting a folder or clicking Detect only checks the path;
+   clicking Install auto-detects and selects PCL2 / PCL CE (both supported).
 6. Click "Install". If a custom homepage is already installed, choose
    "Reinstall" or "Uninstall".
 7. Open the launcher to see the new homepage. If it is already running,
@@ -80,6 +114,8 @@ the homepage with the new language selected.
 
 [Uninstall]
 Select the launcher and data folder in the installer, then click "Uninstall".
+If the matching launcher is running, the installer asks whether to close it:
+YES closes only the selected launcher; NO cancels the uninstall.
 You can also use the command line:
   "PCL主页安装[支持CE].exe" uninstall "D:\PCL-CE\PCL"
 
@@ -89,7 +125,8 @@ You can also use the command line:
   "PCL主页安装[支持CE].exe" pcl "D:\PCL"
   "PCL主页安装[支持CE].exe" ce "D:\PCL-CE"
 pcl = PCL2 (Original), ce = PCL CE. If the folder is omitted, a picker opens.
-When arguments are supplied, a console window opens so you can see the output.
+When arguments are supplied, a console window opens so you can see the output;
+run without arguments when you want the GUI.
 The command line follows the Windows display language by default. You can
 override the homepage language with:
   set PCLHOME_LANG=ja
@@ -98,12 +135,22 @@ PCLHOME_LANG accepts zh, zh-CN, zh-TW, en, ja, ko, fr, de, es, pt, pt-BR, ru,
 it, nl, pl, tr, vi and similar codes.
 
 [Notes]
+- The installer, logon startup, homepage buttons, log refresh and easter egg
+  do not open a console window. The installer writes a windowless launcher
+  named PCLHomeLaunch.vbs; do not delete it.
+- Only command-line installs/uninstalls open a console window so you can see
+  the output. Double-clicking the GUI installer does not.
+- If you installed an older version, run the installer again to update the
+  logon entry to the windowless launcher.
 - PCL2 and PCL CE install the same homepage page; only the data folder and
   config format differ.
 - The installer only modifies the selected launcher's config file
   (Setup.ini or config.v1.yml); the other launcher is untouched.
-- If the selected folder belongs to the other launcher, the installer warns
-  you and lets you choose again.
+- Selecting a folder or clicking Detect only checks the path; clicking Install
+  auto-detects and selects PCL2 / PCL CE (both supported). It does not switch
+  the launcher type early.
+- The close prompt shows only the question, with no parenthetical
+  clarification.
 - PCL CE also gets HintCustomCommand: true, so the first homepage click does
   not show a command confirmation dialog.
 - The installer also adjusts transparency, background, logo and other UI

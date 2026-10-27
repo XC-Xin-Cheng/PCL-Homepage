@@ -24,14 +24,24 @@ PCL 自定义主页安装包 · 源码
 - src/page.xaml：自定义主页模板，包含 @@PCLHOME_*@@ 本地化标记。
 - src/header.bat：BAT 解压和控制台处理。
 - src/launcher.cs：WinForms EXE 引导器，负责解压并运行内嵌 BAT。
-- src/tools/：主页按钮使用的辅助脚本和共享背景图。
+- src/tools/：主页按钮使用的辅助脚本、PCLHomeLaunch.vbs 无窗口启动器和共享背景图。
 - publish.ps1：维护脚本，通过已登录的 GitHub CLI 发布当前源码快照。
 
 说明
+- 仅支持 PCL2 / PCL CE 2.99.0.0 及更早版本；高于 2.99.0.0 时安装器会提示
+  “你这个版本的PCL安装主页已经没有意义了 / 未对您的计算机进行更改”，
+  不写入任何文件、配置或开机自启项，并直接撤销本次安装尝试。
+- 安装或卸载时若所选启动器仍在运行，会询问是否帮你关闭；YES 只关闭当前
+  选择的 PCL2 / PCL CE，NO 取消操作且不修改任何内容。询问文本不附加括号说明。
+- 选择数据文件夹、浏览或点击“检测”时只解析并向状态栏显示路径；点击“安装”
+  后才自动识别并自动选中 PCL2 / PCL CE（两种都支持），不会提前切换。
 - 安装器语言选择会同时决定主页语言；命令行可用 PCLHOME_LANG 覆盖。
 - 旧版 DLL 注入脚本 InjectDll.ps1 已从当前版本移除，不参与构建。
 - 安装器只修改所选启动器（PCL2 或 PCL CE）的配置文件。
 - 一键安装 ZIP 只包含 EXE 和使用说明，BAT 是构建中间产物。
+- 开机自启、主页按钮、日志刷新和彩蛋通过 wscript.exe 启动 PCLHomeLaunch.vbs，
+  再以隐藏窗口运行 PowerShell/CMD，因此不会出现命令行窗口；不要改回直接注册
+  powershell.exe 或 cmd.exe 的开机启动项。
 
 GitHub 仓库
 - https://github.com/XC-Xin-Cheng/PCL-Homepage

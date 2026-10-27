@@ -10,5 +10,6 @@
 - 每次完成源码提交后，同步更新 GitHub Releases：版本号递增（如 v1.1 → v1.2），在最新 `main` 提交上创建 Release 并设为 Latest，至少上传当前 EXE 和使用说明，同时上传一键安装 ZIP。
 - Release 资产名使用 ASCII，例如 `PCL.Homepage.Installer.CE.Supported.exe`、`PCL.Homepage.Installer.CE.Supported.UserGuide.txt`、`PCL.Homepage.Installer.CE.Supported.zip`，避免 `gh` 把方括号当作通配符。不要覆盖旧版本资产。
 - 不要修改 `D:\PCL` 或 `D:\PCL-CE`；测试请使用沙箱目录。
+- 保持开机自启、主页按钮、日志刷新和彩蛋全部无控制台窗口：统一通过 `wscript.exe` 启动 `PCLHomeLaunch.vbs`，不要直接注册 `powershell.exe` 或 `cmd.exe` 的开机启动项。
 - PCL2 和 PCL CE 安装同一套主页；安装器只修改所选启动器的配置。
 - 保持卸载后恢复启动器自带主页，并保留其他界面设置。

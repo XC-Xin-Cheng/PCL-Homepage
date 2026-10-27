@@ -45,7 +45,8 @@ $toolFiles = @(
     @{ Name = 'RefreshLog.ps1'; Marker = 'PS1' },
     @{ Name = 'BgRefresh.ps1'; Marker = 'PS2' },
     @{ Name = 'Egg.ps1'; Marker = 'PS3' },
-    @{ Name = 'VideoWall.ps1'; Marker = 'PS4' }
+    @{ Name = 'VideoWall.ps1'; Marker = 'PS4' },
+    @{ Name = 'PCLHomeLaunch.vbs'; Marker = 'VBS' }
 )
 $tools = @{}
 foreach ($t in $toolFiles) {
@@ -60,7 +61,7 @@ foreach ($line in ($pageText -split "`n")) { $payloadLines.Add($line) }
 $payloadLines.Add('')
 $payloadLines.Add('<!--')
 $payloadLines.Add('==== 工具文件内嵌备份 ====')
-$payloadLines.Add('下面保存着 CustomTools.bat、RefreshLog.ps1、BgRefresh.ps1、Egg.ps1、VideoWall.ps1 的完整内容，')
+$payloadLines.Add('下面保存着 CustomTools.bat、PCLHomeLaunch.vbs、RefreshLog.ps1、BgRefresh.ps1、Egg.ps1、VideoWall.ps1 的完整内容，')
 $payloadLines.Add('以及共享背景图 CustomHomeBG.jpg 的 base64 内容；主页按钮或 CustomTools.bat')
 $payloadLines.Add('发现这些文件缺失时，会自动从这份备份重建，并把背景图导入 PCL\Pictures 文件夹。')
 $payloadLines.Add('请勿修改 @@ 标记行，也请勿在本注释内加入连续的两个减号。')

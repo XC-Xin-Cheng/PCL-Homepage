@@ -13,7 +13,7 @@
 #                 it also registers a logon task
 #                 so it comes back after a reboot; while PCL is the focused
 #                 window it listens for the Shift+X+C easter egg and then
-#                 opens Egg.ps1 in a fresh console.
+#                 opens Egg.ps1 without a console window.
 #   -OpenGameLog  open the running game log (latest.log) in Notepad.
 #   -OpenLauncherLog N  open the N-th newest launcher log in Notepad; when it
 #                       does not exist yet, open the launcher log folder.
@@ -481,19 +481,46 @@ function Get-PclPage {
 }
 
 # ==== watch mode ====
+# The launcher is a tiny VBS started by wscript.exe (a GUI-subsystem program).
+# It starts PowerShell with window style 0, so the logon entry and every
+# homepage button stay invisible.  If the VBS was deleted, rebuild it from
+# the backup embedded in Custom.xaml first.
+function Ensure-LauncherFile {
+    $vbs = Join-Path $Base 'PCLHomeLaunch.vbs'
+    if (Test-Path -LiteralPath $vbs) { return $vbs }
+    $cx = Join-Path $Base 'Custom.xaml'
+    if (-not (Test-Path -LiteralPath $cx)) { return '' }
+    try {
+        $c = [IO.File]::ReadAllText($cx, [Text.Encoding]::UTF8)
+        $m = [regex]::Match($c, '(?sm)^@@YSM-TOOLS-VBS@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-IMG@@')
+        if ($m.Success) {
+            [IO.File]::WriteAllText($vbs, $m.Groups[1].Value, [Text.UTF8Encoding]::new($false))
+            return $vbs
+        }
+    } catch { }
+    return ''
+}
+
 function Ensure-Autostart {
     if ($env:PCLTOOLS_NO_AUTOSTART) { return }
     try {
-        $self = $PSCommandPath
-        if (-not $self) { $self = $MyInvocation.MyCommand.Path }
-        if (-not $self) { return }
-        $cmd = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $self + '" -Watch'
+        $vbs = Ensure-LauncherFile
         $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
         $cur = ''
         try { $cur = [string](Get-ItemProperty -Path $key -Name 'PCLCustomHomeWatch').PCLCustomHomeWatch } catch { }
-        if ($cur -ne $cmd) {
-            Set-ItemProperty -Path $key -Name 'PCLCustomHomeWatch' -Value $cmd
-            WLog 'autostart entry updated'
+        if (-not $vbs) {
+            # Never fall back to a console-subsystem command: that is exactly
+            # the window this launcher exists to avoid.  Drop the old entry.
+            if ($cur) {
+                Remove-ItemProperty -Path $key -Name 'PCLCustomHomeWatch' -ErrorAction SilentlyContinue
+                WLog 'autostart entry removed (launcher missing)'
+            }
+        } else {
+            $cmd = 'wscript.exe //B //Nologo "' + $vbs + '" watch'
+            if ($cur -ne $cmd) {
+                Set-ItemProperty -Path $key -Name 'PCLCustomHomeWatch' -Value $cmd
+                WLog 'autostart entry updated'
+            }
         }
         # The video wallpaper experiment is gone; make sure an entry left behind
         # by an older install does not bring the player back at logon.
@@ -511,7 +538,12 @@ function Start-Egg {
         $egg = $Base + 'Egg.ps1'
         if (-not [IO.File]::Exists($egg)) { return }
         WLog 'egg launched'
-        Start-Process -FilePath 'cmd.exe' -ArgumentList ('/c powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + $egg + '"')
+        $vbs = Ensure-LauncherFile
+        if ($vbs) {
+            Start-Process -FilePath 'wscript.exe' -ArgumentList ('//B //Nologo "' + $vbs + '" egg') | Out-Null
+        } else {
+            Start-Process -FilePath 'powershell.exe' -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $egg + '"') -WindowStyle Hidden | Out-Null
+        }
     } catch { }
 }
 
