@@ -1,5 +1,6 @@
 <!-- PCL 自定义主页
      上排：4 个文件夹快捷按钮，下面一条“刷新背景图片”。
+     右侧下部：日志文件夹按钮 + 自定义指令管理器入口。
      中部：左侧“游戏日志”只读框，只显示正在运行的游戏进程日志；
            没有游戏进程（未启动、已退出、进程被结束）时自动恢复空白。
            右侧“日志文件夹”按钮用资源管理器打开游戏日志所在的文件夹。
@@ -11,7 +12,8 @@
      因此工具文件丢失（误删、复制主页到新环境）时，点一下任意按钮即可自动恢复。
      CustomTools.bat 在点击时才现场读取设置（PCL2 的 Setup.ini 或 PCL CE 的 config.v1.yml），
      切换游戏版本后无需刷新主页。
-     CustomTools.bat 参数：game / mods / saves / schematics / bg / logs / glog / glogdir / log1
+     CustomTools.bat 参数：game / mods / saves / schematics / bg / logs / glog / glogdir / log1 / commands
+        commands = 打开独立的自定义指令管理器（CommandManager.ps1）
         bg   = 直接驱动 PCL 设置页刷新背景图片，不重启启动器（见 BgRefresh.ps1）
         glog = 用记事本打开正在运行的游戏日志（latest.log）
         glogdir = 用资源管理器打开游戏日志文件夹（运行中取游戏目录，否则取所选实例的 logs）
@@ -31,7 +33,7 @@
      -130 的下外边距让 PCL 自带的快照版提示卡片（若显示）叠加在日志底部之上。
      按钮外观：50% 透明白色圆角块、无边框；MyButton 本体全透明（Opacity=0）只负责点击。
      文件末尾的内嵌备份注释：保存 CustomTools.bat、PCLHomeLaunch.vbs、RefreshLog.ps1、
-     BgRefresh.ps1、Egg.ps1、VideoWall.ps1 与共享背景图（CustomHomeBG.jpg 的 base64 内容）；
+     BgRefresh.ps1、Egg.ps1、VideoWall.ps1、CommandManager.ps1 与共享背景图（CustomHomeBG.jpg 的 base64 内容）；
      请勿修改 @@ 标记行，注释内不能出现连续的两个减号。
       彩蛋（Shift+X+C，仅在 PCL 窗口前台时）：在无控制台的图形确认框中选择 Yes 后，把主题图片
       设为 Windows 桌面壁纸（PCL\Pictures\CustomHomeBG.jpg），并把锁屏换成同款图片
@@ -64,7 +66,7 @@
             <ColumnDefinition Width="1*" />
         </Grid.ColumnDefinitions>
 
-        <!-- 左上角：游戏目录，下面接 schematics 文件夹 -->
+        <!-- 左上角：当前实例文件夹，下面接 schematics 文件夹 -->
         <StackPanel Grid.Column="0" Margin="0,0,5,0">
             <Grid>
                 <Border Background="#80FFFFFF" CornerRadius="3">
@@ -183,22 +185,48 @@
             </Grid>
         </Border>
 
-        <Border Grid.Column="1" Width="122" Margin="8,0,0,0" VerticalAlignment="Stretch"
-                Background="#80FFFFFF" CornerRadius="3">
-            <Grid x:Name="LogFolderButtonArea" VerticalAlignment="Stretch">
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="5">
-                    <TextBlock Text="@@PCLHOME_LOG_FOLDER@@" FontSize="12.5" Margin="0,0,0,7"
-                               Foreground="#FF000000"
-                               HorizontalAlignment="Center" IsHitTestVisible="False" />
-                    <TextBlock Text="@@PCLHOME_OPEN_LOG_FOLDER@@" FontSize="11.5"
-                               Foreground="#FF000000"
-                               HorizontalAlignment="Center" IsHitTestVisible="False" />
-                </StackPanel>
+        <Grid Grid.Column="1" Width="122" Margin="8,0,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="8" />
+                <RowDefinition Height="160" />
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0" VerticalAlignment="Stretch"
+                    Background="#80FFFFFF" CornerRadius="3">
+                <Grid x:Name="LogFolderButtonArea" VerticalAlignment="Stretch">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="5">
+                        <TextBlock Text="@@PCLHOME_LOG_FOLDER@@" FontSize="12.5" Margin="0,0,0,7"
+                                   Foreground="#FF000000"
+                                   HorizontalAlignment="Center" IsHitTestVisible="False" />
+                        <TextBlock Text="@@PCLHOME_OPEN_LOG_FOLDER@@" FontSize="11.5"
+                                   Foreground="#FF000000"
+                                   HorizontalAlignment="Center" IsHitTestVisible="False" />
+                    </StackPanel>
                     <local:MyButton HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Text="" Opacity="0"
                                     EventType="打开文件" EventData="wscript.exe|//B //Nologo &quot;{path}\PCL\PCLHomeLaunch.vbs&quot; tool glogdir"
                                     />
                 </Grid>
-        </Border>
+            </Border>
+
+            <!-- 右侧下方：独立的自定义指令管理器 -->
+            <Border Grid.Row="2" VerticalAlignment="Stretch"
+                    Background="#80FFFFFF" CornerRadius="3">
+                <Grid x:Name="CommandButtonArea" VerticalAlignment="Stretch">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="5">
+                        <TextBlock Text="@@PCLHOME_COMMANDS@@" FontSize="12.5" Margin="0,0,0,7"
+                                   Foreground="#FF000000"
+                                   HorizontalAlignment="Center" IsHitTestVisible="False" />
+                        <TextBlock Text="@@PCLHOME_OPEN_COMMANDS@@" FontSize="11.5"
+                                   Foreground="#FF000000"
+                                   HorizontalAlignment="Center" IsHitTestVisible="False" />
+                    </StackPanel>
+                    <local:MyButton HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Text="" Opacity="0"
+                                    EventType="打开文件" EventData="wscript.exe|//B //Nologo &quot;{path}\PCL\PCLHomeLaunch.vbs&quot; commands"
+                                    ToolTip="@@PCLHOME_COMMANDS_TIP@@" />
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 
     <!-- 下部：启动器日志（本次 PCL2 / PCL CE 会话日志的快照）；吃掉页面剩余空间 -->

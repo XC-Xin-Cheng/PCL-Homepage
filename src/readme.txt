@@ -69,6 +69,19 @@ it、nl、pl、tr、vi 等写法。
   卸载时会把主页开关恢复为默认，其他界面设置保持不变。
 - PCL CE 的启动器日志在 PCL\Log\Launch-*.log，PCL2 的日志在 PCL\Log1.txt；
   主页上的“启动器日志”按钮会自动打开当前格式对应的日志。
+- 主页右侧下方新增“自定义指令”面板：点开后可新增、编辑、删除和保存指令，
+  也可直接把指令发送到正在运行的 Minecraft。第一次执行时请在 15 秒内点击
+  一次游戏窗口，管理器会静默等待、识别并记住它；之后需要连续点击两次
+  “执行”确认才会发送。发送前会检查是否在游戏内，并自动关闭已打开的 GUI，
+  多次确认后再输入指令；确认失败则不执行。识别成功时目标窗口行会短暂显示
+  “识别成功”，3 秒后消失，不保存识别缓存。
+- 也可以用“选择窗口”按钮重新识别目标窗口：每次点击都会先清除旧目标，
+  再识别你随后点击的窗口并更新，不会固定为第一次的结果。发送时会输入“/”，
+  粘贴指令并回车。
+- 自定义指令保存在 PCL\CustomCommands.json，卸载主页时不会删除这个文件，
+  方便以后重新安装后继续使用。管理器不会绕过服务器权限。
+- 左上角“打开游戏目录”按钮名称保持不变；悬停提示和点击打开的文件夹
+  已改为当前实例文件夹（没有选中实例时回退到游戏目录）。
 - 首次运行若被 Windows SmartScreen 拦截：点“更多信息”→“仍要运行”。
 
 ============================================================
@@ -158,4 +171,23 @@ it, nl, pl, tr, vi and similar codes.
   leaves the other UI settings unchanged.
 - PCL CE logs are in PCL\Log\Launch-*.log; PCL2 logs are in PCL\Log1.txt.
   The "Launcher log" button on the homepage opens the matching log.
+- A "Custom commands" panel is at the bottom right of the homepage. Open it
+  to add, edit, delete and save commands, or send one to the running Minecraft
+  client. On the first run, click the Minecraft window within 15 seconds; the
+  manager waits silently and remembers it for this session. To send, click Run
+  twice within 10 seconds. Before sending, the manager checks that you are in a
+  world, closes an open GUI, and confirms the state several times; if it cannot
+  confirm, nothing is sent. "Recognized" appears briefly after the target
+  window line for 3 seconds and is not cached. Reopening the manager requires
+  recognizing the window again.
+- Use "Select window" to recognize a new target: each click clears the old
+  target, then recognizes and updates the window you click next; it does not
+  stay fixed to the first result. The sender types "/", pastes the command and
+  presses Enter.
+- The "Open game folder" button keeps its name; its tooltip and the folder it
+  opens now point to the current instance folder (falling back to the game
+  folder when no instance is selected).
+- Commands are stored in PCL\CustomCommands.json. Uninstalling the homepage
+  keeps this file so you can reuse your commands after reinstalling. The
+  manager does not bypass server permissions.
 - If Windows SmartScreen blocks the first run, click "More info" -> "Run anyway".

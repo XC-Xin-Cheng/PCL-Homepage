@@ -19,9 +19,10 @@
 #                       does not exist yet, open the launcher log folder.
 #   -OpenGameLogDir     open the running game log folder, else the selected
 #                       instance's logs folder.
-#   -OpenFolder K  open game/mods/saves/schematics/logs for the selected
-#                  instance.  Paths with &, parentheses or non-ASCII text
-#                  never pass through batch FOR parsing.
+#   -OpenFolder K  open the selected instance folder for game, or its
+#                  mods/saves/schematics/logs folder.  Paths with &,
+#                  parentheses or non-ASCII text never pass through batch FOR
+#                  parsing.
 #   -PageProbe    print which main page PCL shows (Launch/Download/Setup/...).
 #   -Paths        print VER/MCDIR/INSTDIR/INDIEDIR/ISOLATED/LAUNCHLOG for
 #                 CustomTools.bat (values are read from config.v1.yml when
@@ -713,7 +714,13 @@ if ($OpenFolder) {
     $indie = [string]$p['INDIEDIR']
     $target = ''
     switch ($OpenFolder.ToLowerInvariant()) {
-        'game' { $target = [string]$p['MCDIR'] }
+        'game' {
+            # Keep the button label unchanged, but open the folder of the
+            # currently selected instance instead of the global .minecraft.
+            if ($p['INSTDIR']) { $target = [string]$p['INSTDIR'] }
+            elseif ($indie) { $target = $indie }
+            else { $target = [string]$p['MCDIR'] }
+        }
         'mods' { $target = Join-Path $indie 'mods' }
         'saves' { $target = Join-Path $indie 'saves' }
         'schematics' { $target = Join-Path $indie 'schematics' }
