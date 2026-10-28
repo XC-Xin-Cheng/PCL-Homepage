@@ -1,4 +1,4 @@
-# PCL custom homepage: one file installer for PCL2 and PCL CE.
+﻿# PCL custom homepage: one file installer for PCL2 and PCL CE.
 # Runs from the %TEMP% copy that the batch header of the package makes.
 # Installs the page, its helper scripts and the shared background into the
 # selected launcher's data folder.  The user chooses PCL2 (Setup.ini) or
@@ -32,10 +32,9 @@ $script:guiStatusTone = 'muted'
 $script:guiStatusArgs = @()
 $script:guiTarget = ''
 $script:ui = $null
-# PCL versions strictly above this are incompatible: their built-in homepage
-# handling makes this custom homepage obsolete.  2.99.0.0 itself stays
-# supported, so the comparison below is "greater than", not "greater or equal".
-$script:MaxSupportedPclVersion = [version]'2.99.0.0'
+# PCL versions at or above this are incompatible: their built-in homepage
+# handling makes this custom homepage obsolete.  2.99.0.0 itself is not supported.
+$script:MinUnsupportedPclVersion = [version]'2.99.0.0'
 $script:incompatiblePcl = $false
 $script:incompatiblePclVersion = ''
 $script:pclCloseCancelled = $false
@@ -276,7 +275,7 @@ function Get-PclVersionState([string]$dir, [string]$flavor) {
         Found       = ($exes.Count -gt 0)
         Version     = $best
         Path        = $bestPath
-        Unsupported = [bool]($best -and $best -gt $script:MaxSupportedPclVersion)
+        Unsupported = [bool]($best -and $best -ge $script:MinUnsupportedPclVersion)
         Files       = @($exes | ForEach-Object { $_.FullName })
     }
 }
@@ -2554,6 +2553,21 @@ function New-GuiCard([string]$flavor, [int]$x, [int]$y, [int]$w, [int]$h) {
 function Show-InstallerGui {
     Add-Type -AssemblyName System.Windows.Forms | Out-Null
     Add-Type -AssemblyName System.Drawing | Out-Null
+
+    # The visible form runs in powershell.exe.  A unique AppUserModelID stops
+    # the taskbar from using the PowerShell icon for the installer window.
+    try {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class PCLHomeInstallerShell32 {
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern int SetCurrentProcessExplicitAppUserModelID(string appID);
+}
+'@
+        [void][PCLHomeInstallerShell32]::SetCurrentProcessExplicitAppUserModelID('PCL.Homepage.Installer')
+    } catch { }
+
     [System.Windows.Forms.Application]::EnableVisualStyles()
 
     $script:guiMode = $true
@@ -2597,17 +2611,18 @@ function Show-InstallerGui {
     $form.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Point)
     $form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::Dpi
     $form.AutoScaleDimensions = New-Object System.Drawing.SizeF(96, 96)
+    $form.ShowIcon = $true
+    # Use the launcher EXE icon (the PCL logo shown on GitHub) for the
+    # installer window and taskbar button.
+    $launcher = [string]$env:PCLHOME_LAUNCHER
+    if ($launcher -and (Test-Path -LiteralPath $launcher)) {
+        try { $form.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($launcher) } catch { }
+    }
     $form.Add_FormClosing({
         param($s, $e)
         if ($script:guiBusy) { $e.Cancel = $true }
     })
     $script:ui.form = $form
-
-    $launcher = [string]$env:PCLHOME_LAUNCHER
-    if ($launcher -and (Test-Path -LiteralPath $launcher)) {
-        try { $form.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($launcher) } catch { }
-    }
-    if (-not $form.Icon) { $form.Icon = [System.Drawing.SystemIcons]::Application }
 
     $header = New-Object System.Windows.Forms.Panel
     $header.Dock = [System.Windows.Forms.DockStyle]::Top

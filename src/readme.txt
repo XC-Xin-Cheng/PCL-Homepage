@@ -1,8 +1,8 @@
 PCL 自定义主页 · 一键安装包（PCL2 / PCL CE 可选）
 
 【兼容性】
-- 仅支持 PCL2 / PCL CE 2.99.0.0 及更早版本（2.99.0.0 本身仍可用）。
-- 如果启动器版本高于 2.99.0.0，安装器会提示：
+- 仅支持低于 2.99.0.0 的 PCL2 / PCL CE 版本；2.99.0.0 起不适配。
+- 如果启动器版本为 2.99.0.0 或更高，安装器会提示：
   “你这个版本的PCL安装主页已经没有意义了
    未对您的计算机进行更改”
   并且不会写入任何文件、配置或开机自启项；本次安装尝试会直接撤销。
@@ -88,8 +88,8 @@ it、nl、pl、tr、vi 等写法。
 PCL Custom Homepage - One-click Installer (PCL2 / PCL CE)
 
 [Compatibility]
-- Supports PCL2 / PCL CE 2.99.0.0 and earlier only (2.99.0.0 itself is still supported).
-- If the launcher is newer than 2.99.0.0, the installer shows:
+- Supports PCL2 / PCL CE versions below 2.99.0.0 only; 2.99.0.0 and later are not supported.
+- If the launcher is 2.99.0.0 or newer, the installer shows:
   "Installing a custom homepage for this PCL version is no longer meaningful.
    No changes have been made to your computer."
   It writes no files, config or startup entries; the install attempt is cancelled.

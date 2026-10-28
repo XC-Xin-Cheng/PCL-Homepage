@@ -1,10 +1,25 @@
-param(
+﻿param(
     [string]$BaseDir = ''
 )
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+
+# powershell.exe normally owns the taskbar button, which is why the manager
+# used to show the blue PowerShell icon.  Give this process its own AppUserModelID
+# so Windows uses the form icon instead.
+try {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class PCLHomeShell32 {
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern int SetCurrentProcessExplicitAppUserModelID(string appID);
+}
+'@
+    [void][PCLHomeShell32]::SetCurrentProcessExplicitAppUserModelID('PCL.Homepage.CommandManager')
+} catch { }
 
 if (-not $BaseDir) { $BaseDir = $PSScriptRoot }
 $script:BaseDir = [IO.Path]::GetFullPath($BaseDir).TrimEnd('\')
@@ -939,6 +954,13 @@ $form.FormBorderStyle = [Windows.Forms.FormBorderStyle]::Sizable
 $form.MaximizeBox = $false
 $form.MinimizeBox = $true
 $form.ClientSize = New-Object Drawing.Size(780, 540)
+$form.ShowIcon = $true
+$iconProbe = New-Object Windows.Forms.Form
+try {
+    if ($iconProbe.Icon) { $form.Icon = [Drawing.Icon]$iconProbe.Icon.Clone() }
+} finally {
+    $iconProbe.Dispose()
+}
 $form.BackColor = [Drawing.Color]::FromArgb(30, 30, 36)
 $form.ForeColor = [Drawing.Color]::FromArgb(242, 242, 246)
 $form.Font = New-Object Drawing.Font('Microsoft YaHei UI', 9)
@@ -1005,9 +1027,6 @@ $commandBox.ForeColor = [Drawing.Color]::FromArgb(245, 245, 250)
 $commandBox.BorderStyle = [Windows.Forms.BorderStyle]::FixedSingle
 $commandBox.MaxLength = 512
 $form.Controls.Add($commandBox)
-$hintLabel = New-Label (T 'hint') 340 356 420 54 8.5 ([Drawing.Color]::FromArgb(165, 172, 184))
-$form.Controls.Add($hintLabel)
-
 $targetLabel = New-Label (T 'target_none') 340 414 300 22 8.5 ([Drawing.Color]::FromArgb(185, 195, 210))
 $targetLabel.AutoEllipsis = $true
 $form.Controls.Add($targetLabel)
