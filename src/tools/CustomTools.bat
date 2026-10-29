@@ -3,7 +3,7 @@ rem ============================================================
 rem  PCL / PCL CE custom homepage helper - run by its buttons.
 rem  Usage: CustomTools.bat game ^| mods ^| saves ^| schematics ^| bg
 rem                        ^| log1 ^| log2 ^| log3 ^| log4 ^| logs ^| glog ^| glogdir
-rem                        ^| commands
+rem                        ^| glogprev ^| commands
 rem  PCL2 settings live in Setup.ini, PCL CE settings live in
 rem  config.v1.yml.  RefreshLog.ps1 resolves the paths and opens the
 rem  folder or log itself, at click time, so paths containing spaces,
@@ -12,6 +12,8 @@ rem  cmd's FOR command.
 rem    bg   = ask PCL to pick a new random background image by
 rem           driving its settings page (no launcher restart).
 rem    glog = open the RUNNING game log (latest.log) in Notepad.
+rem    glogprev = open the PREVIOUS launch's game log (the newest
+rem              logs\YYYY-MM-DD-N.log.gz, unpacked to %TEMP%) in Notepad.
 rem    glogdir = open the game log FOLDER (running game first, else the
 rem              selected instance's logs folder).
 rem    log1 = open the CURRENT launcher session log in Notepad
@@ -49,7 +51,7 @@ if /i "%~1"=="heal" exit /b 0
 rem The homepage merges PCL\LogView.xaml; make sure it exists and was
 rem produced by the current generator (older snapshots miss keys that
 rem the homepage needs, which would make the page fail to load).
-findstr /c:"YSMLOGG7" "%BASE%LogView.xaml" >nul 2>nul
+findstr /c:"YSMLOGG8" "%BASE%LogView.xaml" >nul 2>nul
 if errorlevel 1 powershell -NoProfile -ExecutionPolicy Bypass -File "%BASE%RefreshLog.ps1" "%BASEARG%"
 
 rem Keep the background log watcher alive (hidden, single instance).
@@ -73,6 +75,7 @@ if /i "%~1"=="commands" goto :commands
 if /i "%~1"=="bg" goto :bg
 if /i "%~1"=="logs" goto :logs
 if /i "%~1"=="glog" goto :glog
+if /i "%~1"=="glogprev" goto :glogprev
 if /i "%~1"=="glogdir" goto :glogdir
 if /i "%~1"=="log1" goto :log1
 if /i "%~1"=="log2" goto :log2
@@ -95,6 +98,12 @@ exit /b %errorlevel%
 :glog
 rem Open the running game log (needs a live Minecraft process).
 powershell -NoProfile -ExecutionPolicy Bypass -File "%BASE%RefreshLog.ps1" "%BASEARG%" -OpenGameLog
+exit /b 0
+
+:glogprev
+rem Open the log of the previous game launch.  The archive is a .log.gz file,
+rem so RefreshLog.ps1 unpacks it to %TEMP% before handing it to Notepad.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%BASE%RefreshLog.ps1" "%BASEARG%" -OpenPreviousGameLog
 exit /b 0
 
 :glogdir

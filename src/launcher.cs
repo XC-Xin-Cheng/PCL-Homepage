@@ -10,9 +10,9 @@ using System.Windows.Forms;
 [assembly: AssemblyDescription("PCL2 / PCL CE custom homepage installer")]
 [assembly: AssemblyProduct("PCL Custom Homepage Installer")]
 [assembly: AssemblyCompany("PCL Homepage")]
-[assembly: AssemblyVersion("1.5.0.0")]
-[assembly: AssemblyFileVersion("1.5.0.0")]
-[assembly: AssemblyInformationalVersion("1.5")]
+[assembly: AssemblyVersion("1.6.1.0")]
+[assembly: AssemblyFileVersion("1.6.1.0")]
+[assembly: AssemblyInformationalVersion("1.6.1")]
 
 static class Program
 {

@@ -69,6 +69,11 @@ it、nl、pl、tr、vi 等写法。
   卸载时会把主页开关恢复为默认，其他界面设置保持不变。
 - PCL CE 的启动器日志在 PCL\Log\Launch-*.log，PCL2 的日志在 PCL\Log1.txt；
   主页上的“启动器日志”按钮会自动打开当前格式对应的日志。
+- 主页中部日志区分成等宽两栏：左边是当前运行中的游戏日志（latest.log），
+  右边是上一次游戏启动的日志（游戏 logs 目录里最新的 YYYY-MM-DD-N.log.gz）；
+  右侧“记事本”按钮会先把压缩日志解压到临时文件再打开。
+- 后台守护脚本每 2 秒重建一次日志快照并刷新主页；把启动器切到最前（成为前台窗口）时
+  会再刷新一次，方便马上看到最新日志。切到下载、设置等页面时不会打扰，回到启动页后补刷新。
 - 主页右侧下方新增“自定义指令”面板：点开后可新增、编辑、删除和保存指令，
   也可直接把指令发送到正在运行的 Minecraft。第一次执行时请在 15 秒内点击
   一次游戏窗口，管理器会静默等待、识别并记住它；之后需要连续点击两次
@@ -171,6 +176,13 @@ it, nl, pl, tr, vi and similar codes.
   leaves the other UI settings unchanged.
 - PCL CE logs are in PCL\Log\Launch-*.log; PCL2 logs are in PCL\Log1.txt.
   The "Launcher log" button on the homepage opens the matching log.
+- The middle log area is split into two equal columns: the left one shows the
+  running game log (latest.log) and the right one shows the previous game
+  launch log (the newest YYYY-MM-DD-N.log.gz in the game's logs folder). The
+  right "Notepad" button unpacks that archive to a temp file before opening it.
+- The background watcher rebuilds the log snapshot and refreshes the homepage
+  every 2 seconds, and refreshes once more whenever the launcher is brought to
+  the front. Other pages are left alone and refreshed when you return.
 - A "Custom commands" panel is at the bottom right of the homepage. Open it
   to add, edit, delete and save commands, or send one to the running Minecraft
   client. On the first run, click the Minecraft window within 15 seconds; the

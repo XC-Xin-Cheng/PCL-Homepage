@@ -1,13 +1,13 @@
-# RefreshLog.ps1 v10 - rebuilds PCL\LogView.xaml, the log snapshot behind the
+# RefreshLog.ps1 v11 - rebuilds PCL\LogView.xaml, the log snapshot behind the
 # Custom.xaml homepage.  Works with PCL2 (Log1.txt) and PCL CE
 # (Log\Launch-*.log).  Modes:
 #   (default)     one shot: rebuild the snapshot, then press F5 in PCL.
-#   -Watch        background watcher (single instance): keeps the snapshot
-#                 fresh, presses F5 when the game starts or stops and when
-#                 PCL itself is (re)started, and afterwards every three
-#                 seconds while the GAME log keeps growing (only when
-#                 the PCL window is in front and showing its home page, so
-#                 a refresh never reloads another page the user is using;
+#   -Watch        background watcher (single instance): rebuilds the snapshot
+#                 and refreshes the homepage every two seconds, presses F5 at
+#                 once when the game starts or stops, when PCL itself is
+#                 (re)started and whenever PCL is brought to the front (only
+#                 when the PCL window is in front and showing its home page,
+#                 so a refresh never reloads another page the user is using;
 #                 the launcher log never triggers a refresh, because page
 #                 reloads themselves append to it);
 #                 it also registers a logon task
@@ -15,6 +15,8 @@
 #                 window it listens for the Shift+X+C easter egg and then
 #                 opens Egg.ps1 without a console window.
 #   -OpenGameLog  open the running game log (latest.log) in Notepad.
+#   -OpenPreviousGameLog  open the log of the previous game launch (the newest
+#                       logs\YYYY-MM-DD-N.log.gz, unpacked to %TEMP% first).
 #   -OpenLauncherLog N  open the N-th newest launcher log in Notepad; when it
 #                       does not exist yet, open the launcher log folder.
 #   -OpenGameLogDir     open the running game log folder, else the selected
@@ -29,6 +31,8 @@
 #                 present, otherwise from Setup.ini).
 # Snapshot keys (consumed by the homepage):
 #   LogViewText     game log of the running Minecraft process ('' when none)
+#   PreviousGameLogText  log of the previous game launch ('' when none yet)
+#   PreviousGameLogLabel archive name of that log, e.g. 2026-10-27-1
 #   LauncherLogText launcher log of the current PCL session
 #   LogHist1..3     start time labels for the previous launcher logs
 # Offline test switches: PCLTOOLS_NO_REFRESH=1 skips F5, PCLTOOLS_NO_WATCH=1
@@ -39,6 +43,7 @@ param(
     [string]$Base,
     [switch]$Watch,
     [switch]$OpenGameLog,
+    [switch]$OpenPreviousGameLog,
     [switch]$OpenGameLogDir,
     [switch]$PageProbe,
     [switch]$Paths,
@@ -57,6 +62,7 @@ $script:logPath = $Base + 'CustomTools.log'
 # sequence must not appear there.
 $script:gflag = '-' + '-gameDir'
 $script:mcCache = @{}
+$script:prevCache = @{ Key = ''; Text = ''; Label = '' }
 $script:watchMutexName = 'PCLCustomHomeLogWatcher'
 
 function WLog([string]$s) {
@@ -280,6 +286,135 @@ function Get-GameLogStamp($mc) {
     } catch { return '' }
 }
 
+# ==== previous game log ====
+# Minecraft renames the old latest.log to logs\YYYY-MM-DD-N.log.gz when a new
+# session starts, so the newest archive is the log of the previous launch.
+# A running game points at its own folder; without one, fall back to the
+# selected instance (isolation), then to the global .minecraft folder.
+function Get-GameLogDirs {
+    $list = New-Object System.Collections.Generic.List[string]
+    $mc = Get-McInfo
+    if ($mc -and $mc.Dir) { $list.Add((Join-Path $mc.Dir 'logs')) }
+    $p = Resolve-PclPaths
+    foreach ($key in @('INDIEDIR', 'INSTDIR', 'MCDIR')) {
+        $d = [string]$p[$key]
+        if (-not $d) { continue }
+        $ld = Join-Path $d 'logs'
+        if (-not ($list -contains $ld)) { $list.Add($ld) }
+    }
+    return $list
+}
+
+# The rotated name carries the session date and a per day counter, so sorting
+# on it stays correct even when files were copied or touched afterwards.
+function Get-PreviousGameLog {
+    foreach ($dir in @(Get-GameLogDirs)) {
+        if (-not [IO.Directory]::Exists($dir)) { continue }
+        $found = New-Object System.Collections.Generic.List[object]
+        foreach ($f in @(Get-ChildItem -LiteralPath $dir -File -ErrorAction SilentlyContinue)) {
+            if ($f.Name -ieq 'latest.log') { continue }
+            if ($f.Name -notmatch '(?i)\.log(\.gz)?$') { continue }
+            $stamp = $f.LastWriteTime
+            $order = 0
+            $m = [regex]::Match($f.Name, '^(\d{4})-(\d{1,2})-(\d{1,2})-(\d+)\.log(\.gz)?$')
+            if ($m.Success) {
+                try {
+                    $stamp = New-Object DateTime([int]$m.Groups[1].Value, [int]$m.Groups[2].Value, [int]$m.Groups[3].Value)
+                    $order = [int]$m.Groups[4].Value
+                } catch { }
+            }
+            $found.Add([pscustomobject]@{ File = $f; Stamp = $stamp; Order = $order })
+        }
+        if ($found.Count -eq 0) { continue }
+        $best = @($found | Sort-Object Stamp, Order -Descending)[0]
+        $label = [regex]::Replace($best.File.Name, '(?i)\.log(\.gz)?$', '')
+        return @{ Path = $best.File.FullName; Label = $label }
+    }
+    return $null
+}
+
+function New-GzipReader([IO.Stream]$stream) {
+    try { Add-Type -AssemblyName System.IO.Compression -ErrorAction Stop } catch { }
+    return (New-Object IO.Compression.GZipStream($stream, [IO.Compression.CompressionMode]::Decompress))
+}
+
+# Unpack a gzip log while holding only the last <cap> bytes, so a very long
+# archive neither exhausts memory nor gets cut in the middle of a character.
+function Read-GzipTailText([string]$path, [int]$cap) {
+    $out = ''
+    try {
+        $fs = [IO.File]::Open($path, [IO.FileMode]::Open, [IO.FileAccess]::Read, ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+        try {
+            $gz = New-GzipReader $fs
+            try {
+                $tail = New-Object byte[] $cap
+                $have = 0
+                $total = 0
+                $buf = New-Object byte[] 65536
+                while (($read = $gz.Read($buf, 0, $buf.Length)) -gt 0) {
+                    $total = $total + $read
+                    if ($read -ge $cap) {
+                        [Array]::Copy($buf, $read - $cap, $tail, 0, $cap)
+                        $have = $cap
+                    } else {
+                        $keep = $have + $read - $cap
+                        if ($keep -lt 0) { $keep = 0 }
+                        if ($keep -gt 0) { [Array]::Copy($tail, $keep, $tail, 0, $have - $keep) }
+                        $at = $have - $keep
+                        [Array]::Copy($buf, 0, $tail, $at, $read)
+                        $have = $at + $read
+                    }
+                }
+                if ($have -gt 0) {
+                    $out = Decode-LogText $tail $have
+                    $out = $out.TrimStart([char]0xFEFF)
+                    if ($total -gt $have) {
+                        $i = $out.IndexOf([char]10)
+                        if ($i -ge 0) { $out = (Get-TruncNote $cap) + "`r`n`r`n" + $out.Substring($i + 1) }
+                    }
+                }
+            } finally { $gz.Dispose() }
+        } finally { $fs.Dispose() }
+    } catch { $out = '' }
+    return $out
+}
+
+# The folder that holds the game logs: the running game first, else the
+# selected instance's logs folder.
+function Get-GameLogDir {
+    $mc = Get-McInfo
+    if ($mc -and $mc.Dir) { return (Join-Path $mc.Dir 'logs') }
+    $p = Resolve-PclPaths
+    if ($p['INDIEDIR']) { return (Join-Path ([string]$p['INDIEDIR']) 'logs') }
+    if ($p['INSTDIR']) { return (Join-Path ([string]$p['INSTDIR']) 'logs') }
+    if ($p['MCDIR']) { return (Join-Path ([string]$p['MCDIR']) 'logs') }
+    return ''
+}
+
+# Notepad cannot read a .gz archive, so the previous log is unpacked to a
+# temporary file first.  With PCLTOOLS_OPEN_DRYRUN nothing is opened.
+function Open-PreviousGameLogFile {
+    $prev = Get-PreviousGameLog
+    if (-not $prev) { return $false }
+    $path = [string]$prev.Path
+    if ($path -notmatch '(?i)\.gz$') { return (Open-Target $path 'notepad') }
+    try {
+        $dst = Join-Path ([IO.Path]::GetTempPath()) ('PCLHomePreviousGameLog_' + [IO.Path]::GetFileNameWithoutExtension($path))
+        $in = [IO.File]::Open($path, [IO.FileMode]::Open, [IO.FileAccess]::Read, ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+        try {
+            $gz = New-GzipReader $in
+            try {
+                $out = [IO.File]::Open($dst, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::Read)
+                try {
+                    $buf = New-Object byte[] 65536
+                    while (($read = $gz.Read($buf, 0, $buf.Length)) -gt 0) { $out.Write($buf, 0, $read) }
+                } finally { $out.Dispose() }
+            } finally { $gz.Dispose() }
+        } finally { $in.Dispose() }
+        return (Open-Target $dst 'notepad')
+    } catch { return $false }
+}
+
 # ==== readers ====
 # Log text decoder.  The launcher log is plain UTF-8, but some mods write
 # Chinese through the console code page, so a few lines in the game log are
@@ -306,6 +441,10 @@ function Decode-LogText([byte[]]$buf, [int]$n) {
     return $sb.ToString()
 }
 
+function Get-TruncNote([int]$cap) {
+    return '[日志过长，仅显示最后 ' + [string]$cap + ' 字节]'
+}
+
 function Read-TailText([string]$path, [int]$cap) {
     $out = ''
     try {
@@ -321,7 +460,7 @@ function Read-TailText([string]$path, [int]$cap) {
             $out = $out.TrimStart([char]0xFEFF)
             if ($start -gt 0) {
                 $i = $out.IndexOf([char]10)
-                if ($i -ge 0) { $out = '[日志过长，仅显示最后 ' + [string]$cap + ' 字节]' + "`r`n`r`n" + $out.Substring($i + 1) }
+                if ($i -ge 0) { $out = (Get-TruncNote $cap) + "`r`n`r`n" + $out.Substring($i + 1) }
             }
         } finally { $fs.Close() }
     } catch { $out = '' }
@@ -372,12 +511,14 @@ function Reverse-Lines([string]$s) {
     return ($lines -join "`r`n")
 }
 
-function New-Snapshot([string]$game, [string]$launcher, [string]$h1, [string]$h2, [string]$h3) {
+function New-Snapshot([string]$game, [string]$prev, [string]$prevLabel, [string]$launcher, [string]$h1, [string]$h2, [string]$h3) {
     # The namespace prefix word is split on purpose; see the note near $gflag.
     $n = 'xm' + 'lns'
     $d = '<ResourceDictionary ' + $n + '="http://schemas.microsoft.com/winfx/2006/xaml/presentation" ' + $n + ':x="http://schemas.microsoft.com/winfx/2006/xaml" ' + $n + ':sys="clr-namespace:System;assembly=mscorlib">'
-    $d = $d + '<sys:String x:Key="LogGen">YSMLOGG7</sys:String>'
+    $d = $d + '<sys:String x:Key="LogGen">YSMLOGG8</sys:String>'
     $d = $d + '<sys:String x:Key="LogViewText" xml:space="preserve">' + (Esc $game) + '</sys:String>'
+    $d = $d + '<sys:String x:Key="PreviousGameLogText" xml:space="preserve">' + (Esc $prev) + '</sys:String>'
+    $d = $d + '<sys:String x:Key="PreviousGameLogLabel" xml:space="preserve">' + (Esc $prevLabel) + '</sys:String>'
     $d = $d + '<sys:String x:Key="LauncherLogText" xml:space="preserve">' + (Esc $launcher) + '</sys:String>'
     $d = $d + '<sys:String x:Key="LogHist1" xml:space="preserve">' + (Esc $h1) + '</sys:String>'
     $d = $d + '<sys:String x:Key="LogHist2" xml:space="preserve">' + (Esc $h2) + '</sys:String>'
@@ -392,10 +533,32 @@ function Compose-Snapshot {
     if ($mc -and $mc.Dir) {
         $game = Reverse-Lines (Read-TailText (Join-Path (Join-Path $mc.Dir 'logs') 'latest.log') 200000)
     }
+    # The previous game log only changes when a new launch rotates the files,
+    # so its unpacked text is cached on path, size and write time.  Without
+    # the cache the watcher would gunzip the same archive every two seconds.
+    $prev = ''
+    $prevLabel = ''
+    $prevLog = Get-PreviousGameLog
+    if ($prevLog) {
+        $prevPath = [string]$prevLog.Path
+        $prevKey = $prevPath
+        try {
+            $fi = Get-Item -LiteralPath $prevPath
+            $prevKey = $prevKey + '|' + [string]$fi.Length + '|' + [string]$fi.LastWriteTimeUtc.Ticks
+        } catch { }
+        if ($script:prevCache.Key -ne $prevKey) {
+            $text = ''
+            if ($prevPath -match '(?i)\.gz$') { $text = Read-GzipTailText $prevPath 200000 }
+            if (-not $text) { $text = Read-TailText $prevPath 200000 }
+            $script:prevCache = @{ Key = $prevKey; Text = $text; Label = [string]$prevLog.Label }
+        }
+        $prev = Reverse-Lines $script:prevCache.Text
+        $prevLabel = $script:prevCache.Label
+    }
     $launcherPath = Get-LauncherLogPath
     $launcher = ''
     if ($launcherPath) { $launcher = Reverse-Lines (Read-TailText $launcherPath 200000) }
-    return New-Snapshot $game $launcher (Get-HistLabel (Get-LauncherLogPathN 2)) (Get-HistLabel (Get-LauncherLogPathN 3)) (Get-HistLabel (Get-LauncherLogPathN 4))
+    return New-Snapshot $game $prev $prevLabel $launcher (Get-HistLabel (Get-LauncherLogPathN 2)) (Get-HistLabel (Get-LauncherLogPathN 3)) (Get-HistLabel (Get-LauncherLogPathN 4))
 }
 
 function Save-Snapshot([string]$doc) {
@@ -590,13 +753,16 @@ function Start-Watch {
     $lastMc = '<init>'
     $lastGameLog = '<init>'
     $pclWas = $null
+    $pclFront = $null
     $f5Pending = $false
     $autoDue = $false
+    $frontDue = $false
     $lastF5 = [DateTime]::MinValue
-    $lastWrite = [DateTime]::MinValue
     $lastHeld = [DateTime]::MinValue
+    # One cycle is two seconds: rebuild the snapshot and refresh the page.
+    # The easter-egg hotkey is still polled every 100 ms inside the cycle.
     while ($true) {
-        for ($tick = 0; $tick -lt 10; $tick++) {
+        for ($tick = 0; $tick -lt 20; $tick++) {
             Start-Sleep -Milliseconds 100
             Test-EggHotkey
         }
@@ -608,6 +774,16 @@ function Start-Watch {
             $pclWas = $pclNow
             if ($pclNow) { $f5Pending = $true; WLog 'PCL window appeared' }
             else { WLog 'PCL window closed' }
+        }
+        # Coming back to the launcher is a good moment for one more refresh:
+        # the user is looking at the page, so show the newest log right away.
+        $frontNow = $false
+        if ($pcl) { $frontNow = Test-PclForeground $pcl.MainWindowHandle }
+        if ($null -eq $pclFront) {
+            $pclFront = $frontNow
+        } elseif ($frontNow -ne $pclFront) {
+            $pclFront = $frontNow
+            if ($frontNow) { $frontDue = $true; WLog 'PCL became foreground' }
         }
         $mc = Get-McInfo
         $mcKey = 'none'
@@ -625,18 +801,16 @@ function Start-Watch {
             if ($lastGameLog -ne '<init>' -and $gameLog) { $autoDue = $true }
             $lastGameLog = $gameLog
         }
-        # Keep the stored snapshot current, but only a change in the GAME log
-        # schedules an automatic F5.  The launcher log grows with every page
-        # reload, so it must never drive the refresh itself.
-        if (([DateTime]::Now - $lastWrite).TotalSeconds -gt 3) {
-            if (Save-Snapshot (Compose-Snapshot)) { $lastWrite = [DateTime]::Now }
-        }
-        # Keep the page fresh on its own: when nobody pressed F5 in the last
-        # three seconds and the game log gained new content, press F5 again
-        # (only while the PCL window is in front, so the game never loses
-        # focus to a background refresh).
-        if (($f5Pending -or $autoDue) -and $pclNow -and -not $env:PCLTOOLS_NO_REFRESH) {
-            $gap = 3
+        # Keep the stored snapshot current once per cycle.  Only a change in
+        # the GAME log schedules an automatic F5.  The launcher log grows with
+        # every page reload, so it must never drive the refresh itself.
+        Save-Snapshot (Compose-Snapshot) | Out-Null
+        # Refresh the page: every cycle while something is pending, and once
+        # more whenever the launcher is brought to the front.  The F5 itself
+        # only lands while the PCL window is in front, so the game never
+        # loses focus to a background refresh.
+        if (($f5Pending -or $autoDue -or $frontDue) -and $pclNow -and -not $env:PCLTOOLS_NO_REFRESH) {
+            $gap = 2
             if (([DateTime]::Now - $lastF5).TotalSeconds -gt $gap) {
                 $page = Get-PclPage
                 if ($page -ne 'Launch') {
@@ -651,6 +825,7 @@ function Start-Watch {
                     $lastF5 = [DateTime]::Now
                     $f5Pending = $false
                     $autoDue = $false
+                    $frontDue = $false
                     WLog 'F5 sent'
                 }
             }
@@ -693,17 +868,19 @@ if ($OpenGameLog) {
     exit 1
 }
 
+if ($OpenPreviousGameLog) {
+    # The archive of the previous launch; without one, show the folder that
+    # will hold it (same fallback as the log folder button).
+    if (Open-PreviousGameLogFile) { exit 0 }
+    $ld = Get-GameLogDir
+    if (-not $ld) { $ld = $Base.TrimEnd('\') + '\..' }
+    if (Open-Target $ld 'explorer') { exit 0 }
+    exit 1
+}
+
 if ($OpenGameLogDir) {
-    $mc = Get-McInfo
-    if ($mc -and $mc.Dir) {
-        if (Open-Target (Join-Path $mc.Dir 'logs') 'explorer') { exit 0 }
-    }
-    # No running game: fall back to the selected instance's logs folder.
-    $p = Resolve-PclPaths
-    $ld = ''
-    if ($p['INDIEDIR']) { $ld = Join-Path $p['INDIEDIR'] 'logs' }
-    elseif ($p['INSTDIR']) { $ld = Join-Path $p['INSTDIR'] 'logs' }
-    elseif ($p['MCDIR']) { $ld = Join-Path $p['MCDIR'] 'logs' }
+    # Running game first, else the selected instance's logs folder.
+    $ld = Get-GameLogDir
     if (-not $ld) { $ld = $Base.TrimEnd('\') + '\..' }
     if (Open-Target $ld 'explorer') { exit 0 }
     exit 1
