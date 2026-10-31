@@ -3,7 +3,7 @@ rem ============================================================
 rem  PCL / PCL CE custom homepage helper - run by its buttons.
 rem  Usage: CustomTools.bat game ^| mods ^| saves ^| schematics ^| bg
 rem                        ^| log1 ^| log2 ^| log3 ^| log4 ^| logs ^| glog ^| glogdir
-rem                        ^| glogprev ^| commands
+rem                        ^| glogprev ^| commands ^| online
 rem  PCL2 settings live in Setup.ini, PCL CE settings live in
 rem  config.v1.yml.  RefreshLog.ps1 resolves the paths and opens the
 rem  folder or log itself, at click time, so paths containing spaces,
@@ -31,7 +31,8 @@ set "BASEARG=%~dp0"
 if "%BASEARG:~-1%"=="\" set "BASEARG=%BASEARG:~0,-1%"
 
 rem Self-heal: rebuild any missing helper file (RefreshLog.ps1,
-rem BgRefresh.ps1, Egg.ps1, VideoWall.ps1, CommandManager.ps1, PCLHomeLaunch.vbs) and
+rem BgRefresh.ps1, Egg.ps1, VideoWall.ps1, CommandManager.ps1, Online.ps1,
+rem PCLHomeLaunch.vbs) and
 rem import the shared background image from the backup embedded at
 rem the end of Custom.xaml.
 if /i "%~1"=="heal" goto :heal
@@ -40,11 +41,12 @@ if not exist "%BASE%BgRefresh.ps1" goto :heal
 if not exist "%BASE%Egg.ps1" goto :heal
 if not exist "%BASE%VideoWall.ps1" goto :heal
 if not exist "%BASE%CommandManager.ps1" goto :heal
+if not exist "%BASE%Online.ps1" goto :heal
 if not exist "%BASE%PCLHomeLaunch.vbs" goto :heal
 if not exist "Pictures\CustomHomeBG.jpg" goto :heal
 goto :healed
 :heal
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText('Custom.xaml');if(-not [IO.File]::Exists('CustomTools.bat')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-BAT@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS1@@');if($m.Success){[IO.File]::WriteAllText('CustomTools.bat',$m.Groups[1].Value)}};if(-not [IO.File]::Exists('RefreshLog.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS1@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS2@@');if($m.Success){[IO.File]::WriteAllText('RefreshLog.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('BgRefresh.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS2@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS3@@');if($m.Success){[IO.File]::WriteAllText('BgRefresh.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('Egg.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS3@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS4@@');if($m.Success){[IO.File]::WriteAllText('Egg.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('VideoWall.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS4@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS5@@');if($m.Success){[IO.File]::WriteAllText('VideoWall.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('CommandManager.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS5@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-VBS@@');if($m.Success){[IO.File]::WriteAllText('CommandManager.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('PCLHomeLaunch.vbs')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-VBS@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-IMG@@');if($m.Success){[IO.File]::WriteAllText('PCLHomeLaunch.vbs',$m.Groups[1].Value,[Text.UTF8Encoding]::new($false))}};[void][IO.Directory]::CreateDirectory('Pictures');if(-not [IO.File]::Exists('Pictures\CustomHomeBG.jpg')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-IMG@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-END@@');if($m.Success){[IO.File]::WriteAllBytes('Pictures\CustomHomeBG.jpg',[Convert]::FromBase64String(($m.Groups[1].Value -replace '\s','')))}};"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText('Custom.xaml');if(-not [IO.File]::Exists('CustomTools.bat')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-BAT@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS1@@');if($m.Success){[IO.File]::WriteAllText('CustomTools.bat',$m.Groups[1].Value)}};if(-not [IO.File]::Exists('RefreshLog.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS1@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS2@@');if($m.Success){[IO.File]::WriteAllText('RefreshLog.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('BgRefresh.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS2@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS3@@');if($m.Success){[IO.File]::WriteAllText('BgRefresh.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('Egg.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS3@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS4@@');if($m.Success){[IO.File]::WriteAllText('Egg.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('VideoWall.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS4@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS5@@');if($m.Success){[IO.File]::WriteAllText('VideoWall.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('CommandManager.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS5@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-PS6@@');if($m.Success){[IO.File]::WriteAllText('CommandManager.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('Online.ps1')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-PS6@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-VBS@@');if($m.Success){[IO.File]::WriteAllText('Online.ps1',$m.Groups[1].Value,[Text.UTF8Encoding]::new($true))}};if(-not [IO.File]::Exists('PCLHomeLaunch.vbs')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-VBS@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-IMG@@');if($m.Success){[IO.File]::WriteAllText('PCLHomeLaunch.vbs',$m.Groups[1].Value,[Text.UTF8Encoding]::new($false))}};[void][IO.Directory]::CreateDirectory('Pictures');if(-not [IO.File]::Exists('Pictures\CustomHomeBG.jpg')){$m=[regex]::Match($c,'(?sm)^@@YSM-TOOLS-IMG@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-END@@');if($m.Success){[IO.File]::WriteAllBytes('Pictures\CustomHomeBG.jpg',[Convert]::FromBase64String(($m.Groups[1].Value -replace '\s','')))}};"
 :healed
 if /i "%~1"=="heal" exit /b 0
 
@@ -72,6 +74,7 @@ if /i "%~1"=="paths" (
 )
 
 if /i "%~1"=="commands" goto :commands
+if /i "%~1"=="online" goto :online
 if /i "%~1"=="bg" goto :bg
 if /i "%~1"=="logs" goto :logs
 if /i "%~1"=="glog" goto :glog
@@ -139,6 +142,12 @@ exit /b 0
 :commands
 rem Open the standalone command manager without a console window.
 powershell -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "%BASE%CommandManager.ps1" "%BASEARG%"
+exit /b 0
+
+:online
+rem Open the standalone Terracotta multiplayer window without a console window.
+rem Online.ps1 finds, downloads and starts the official Terracotta build.
+powershell -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "%BASE%Online.ps1" "%BASEARG%"
 exit /b 0
 
 :bg

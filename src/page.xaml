@@ -232,7 +232,9 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="*" />
                 <RowDefinition Height="8" />
-                <RowDefinition Height="160" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="8" />
+                <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
             <Border Grid.Row="0" VerticalAlignment="Stretch"
@@ -252,8 +254,26 @@
                 </Grid>
             </Border>
 
-            <!-- 右侧下方：独立的自定义指令管理器 -->
+            <!-- 右侧中间：独立的陶瓦联机窗口 -->
             <Border Grid.Row="2" VerticalAlignment="Stretch"
+                    Background="#80FFFFFF" CornerRadius="3">
+                <Grid x:Name="OnlineButtonArea" VerticalAlignment="Stretch">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="5">
+                        <TextBlock Text="@@PCLHOME_ONLINE@@" FontSize="12.5" Margin="0,0,0,7"
+                                   Foreground="#FF000000"
+                                   HorizontalAlignment="Center" IsHitTestVisible="False" />
+                        <TextBlock Text="@@PCLHOME_OPEN_ONLINE@@" FontSize="11.5"
+                                   Foreground="#FF000000"
+                                   HorizontalAlignment="Center" IsHitTestVisible="False" />
+                    </StackPanel>
+                    <local:MyButton HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Text="" Opacity="0"
+                                    EventType="打开文件" EventData="wscript.exe|//B //Nologo &quot;{path}\PCL\PCLHomeLaunch.vbs&quot; online"
+                                    ToolTip="@@PCLHOME_ONLINE_TIP@@" />
+                </Grid>
+            </Border>
+
+            <!-- 右侧下方：独立的自定义指令管理器 -->
+            <Border Grid.Row="4" VerticalAlignment="Stretch"
                     Background="#80FFFFFF" CornerRadius="3">
                 <Grid x:Name="CommandButtonArea" VerticalAlignment="Stretch">
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="5">

@@ -1,5 +1,5 @@
 ' PCLHomeLaunch.vbs - windowless launcher for the PCL custom homepage.
-' Modes: watch | tool <name> | commands | bg | refresh | egg | heal
+' Modes: watch | tool <name> | commands | online | bg | refresh | egg | heal
 '
 ' wscript.exe is a GUI-subsystem program, so starting this file never creates
 ' a console window.  Every PowerShell and cmd child is started with window
@@ -43,6 +43,7 @@ Sub EnsureTools
     If Not fso.FileExists(base & "\Egg.ps1") Then need = True
     If Not fso.FileExists(base & "\VideoWall.ps1") Then need = True
     If Not fso.FileExists(base & "\CommandManager.ps1") Then need = True
+    If Not fso.FileExists(base & "\Online.ps1") Then need = True
     If Not fso.FileExists(base & "\Pictures\CustomHomeBG.jpg") Then need = True
     If Not need Then Exit Sub
 
@@ -69,6 +70,8 @@ Select Case mode
         RunHidden "cmd.exe /d /s /c " & Q(Q(base & "\CustomTools.bat") & " " & LCase(WScript.Arguments(1)))
     Case "commands"
         RunHidden PsFileSta("CommandManager.ps1", " " & Q(base))
+    Case "online"
+        RunHidden PsFileSta("Online.ps1", " " & Q(base))
     Case "bg"
         RunHidden PsFile("BgRefresh.ps1", " " & Q(base))
     Case "refresh"

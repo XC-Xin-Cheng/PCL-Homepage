@@ -704,7 +704,8 @@ function Invoke-Install([string]$dir, [string]$flavor, [string]$lang = '') {
     [IO.File]::WriteAllText((Join-Path $dir 'BgRefresh.ps1'), (Get-Seg $c 'PS2' 'PS3'), [Text.UTF8Encoding]::new($true))
     [IO.File]::WriteAllText((Join-Path $dir 'Egg.ps1'), (Get-Seg $c 'PS3' 'PS4'), [Text.UTF8Encoding]::new($true))
     [IO.File]::WriteAllText((Join-Path $dir 'VideoWall.ps1'), (Get-Seg $c 'PS4' 'PS5'), [Text.UTF8Encoding]::new($true))
-    [IO.File]::WriteAllText((Join-Path $dir 'CommandManager.ps1'), (Get-Seg $c 'PS5' 'VBS'), [Text.UTF8Encoding]::new($true))
+    [IO.File]::WriteAllText((Join-Path $dir 'CommandManager.ps1'), (Get-Seg $c 'PS5' 'PS6'), [Text.UTF8Encoding]::new($true))
+    [IO.File]::WriteAllText((Join-Path $dir 'Online.ps1'), (Get-Seg $c 'PS6' 'VBS'), [Text.UTF8Encoding]::new($true))
     [IO.File]::WriteAllText((Join-Path $dir 'PCLHomeLaunch.vbs'), (Get-Seg $c 'VBS' 'IMG'), [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $dir 'CommandManager.lang'), ($lang + "`r`n"), [Text.UTF8Encoding]::new($false))
     foreach ($old in @('InjectDll.ps1', 'InjectDll.lock')) {
@@ -762,9 +763,16 @@ function Invoke-Uninstall([string]$dir, [string]$flavor) {
             try { Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name $n -ErrorAction SilentlyContinue } catch { }
         }
     }
-    foreach ($f in @('Custom.xaml', 'LogView.xaml', 'CustomTools.bat', 'PCLHomeLaunch.vbs', 'RefreshLog.ps1', 'BgRefresh.ps1', 'Egg.ps1', 'VideoWall.ps1', 'CommandManager.ps1', 'CommandManager.lang', 'CustomCommandTarget.json', 'CustomTools.log', 'VideoWall.ready', 'Pictures\CustomHomeBG.jpg', 'Pictures\videoframe_2546.png', 'Pictures\CustomHomeLock.png')) {
+    foreach ($f in @('Custom.xaml', 'LogView.xaml', 'CustomTools.bat', 'PCLHomeLaunch.vbs', 'RefreshLog.ps1', 'BgRefresh.ps1', 'Egg.ps1', 'VideoWall.ps1', 'CommandManager.ps1', 'Online.ps1', 'CommandManager.lang', 'CustomCommandTarget.json', 'CustomTools.log', 'VideoWall.ready', 'Pictures\CustomHomeBG.jpg', 'Pictures\videoframe_2546.png', 'Pictures\CustomHomeLock.png')) {
         try { Remove-Item -LiteralPath ($dir + '\' + $f) -Force -ErrorAction SilentlyContinue } catch { }
     }
+    # Terracotta itself is a separate program the user may also run from HMCL,
+    # so only the copy this installer downloaded is removed.
+    foreach ($f in @(Get-ChildItem -LiteralPath ($dir + '\Online') -Filter 'terracotta*.exe' -File -ErrorAction SilentlyContinue) +
+                    @(Get-ChildItem -LiteralPath ($dir + '\Online') -Filter 'VCRUNTIME140.DLL' -File -ErrorAction SilentlyContinue)) {
+        try { Remove-Item -LiteralPath $f.FullName -Force -ErrorAction SilentlyContinue } catch { }
+    }
+    try { Remove-Item -LiteralPath ($dir + '\Online') -Recurse -Force -ErrorAction SilentlyContinue } catch { }
     try { Remove-Item -LiteralPath ($dir + '\VideoWall') -Recurse -Force -ErrorAction SilentlyContinue } catch { }
     Reset-UiCustomType $dir $flavor
     Say ''
@@ -1697,6 +1705,9 @@ $script:pageText = @{
         commands = 'Custom commands'
         open_commands = 'Open command manager'
         commands_tip = 'Open the custom command manager'
+        online = 'Multiplayer'
+        open_online = 'Terracotta'
+        online_tip = 'Open the Terracotta multiplayer window (room code, no port forwarding)'
         launcher_log = 'Launcher log'
         open_launcher_log_tip = "Open this launcher session's log in Notepad"
         previous_log = 'Previous launch'
@@ -1723,6 +1734,9 @@ $script:pageText = @{
         commands = '自定义指令'
         open_commands = '打开指令管理'
         commands_tip = '打开自定义指令管理器'
+        online = '联机'
+        open_online = '陶瓦联机'
+        online_tip = '打开陶瓦联机窗口（房间码联机，无需端口映射）'
         launcher_log = '启动器日志'
         open_launcher_log_tip = '用记事本打开本次启动器会话日志'
         previous_log = '上一次启动'
@@ -1749,6 +1763,9 @@ $script:pageText = @{
         commands = '自訂指令'
         open_commands = '開啟指令管理'
         commands_tip = '開啟自訂指令管理器'
+        online = '連線'
+        open_online = '陶瓦聯機'
+        online_tip = '開啟陶瓦聯機視窗（房間碼連線，無需連接埠轉送）'
         launcher_log = '啟動器日誌'
         open_launcher_log_tip = '用記事本開啟本次啟動器工作階段日誌'
         previous_log = '上一次啟動'
@@ -1775,6 +1792,9 @@ $script:pageText = @{
         commands = 'カスタムコマンド'
         open_commands = 'コマンド管理を開く'
         commands_tip = 'カスタムコマンド管理を開く'
+        online = 'マルチプレイ'
+        open_online = 'Terracotta'
+        online_tip = 'Terracotta のマルチプレイ画面を開きます（ルームコード接続、ポート開放不要）'
         launcher_log = 'ランチャーログ'
         open_launcher_log_tip = '今回のランチャーセッションのログをメモ帳で開く'
         previous_log = '前回の起動'
@@ -1801,6 +1821,9 @@ $script:pageText = @{
         commands = '사용자 지정 명령'
         open_commands = '명령 관리 열기'
         commands_tip = '사용자 지정 명령 관리 열기'
+        online = '멀티플레이'
+        open_online = 'Terracotta'
+        online_tip = 'Terracotta 멀티플레이 창을 엽니다(방 코드 연결, 포트 포워딩 불필요)'
         launcher_log = '런처 로그'
         open_launcher_log_tip = '이번 런처 세션 로그를 메모장으로 열기'
         previous_log = '이전 실행'
@@ -1827,6 +1850,9 @@ $script:pageText = @{
         commands = 'Commandes personnalisées'
         open_commands = 'Ouvrir le gestionnaire'
         commands_tip = 'Ouvrir le gestionnaire de commandes personnalisées'
+        online = 'Multijoueur'
+        open_online = 'Terracotta'
+        online_tip = 'Ouvrir la fenêtre multijoueur Terracotta (code de salon, sans redirection de port)'
         launcher_log = 'Journal du lanceur'
         open_launcher_log_tip = 'Ouvrir le journal de cette session du lanceur dans le Bloc-notes'
         previous_log = 'Lancement précédent'
@@ -1853,6 +1879,9 @@ $script:pageText = @{
         commands = 'Eigene Befehle'
         open_commands = 'Befehlsverwaltung öffnen'
         commands_tip = 'Eigene Befehle verwalten'
+        online = 'Mehrspieler'
+        open_online = 'Terracotta'
+        online_tip = 'Terracotta-Mehrspielerfenster öffnen (Raumcode, keine Portfreigabe)'
         launcher_log = 'Launcher-Log'
         open_launcher_log_tip = 'Log dieser Launcher-Sitzung im Editor öffnen'
         previous_log = 'Letzter Start'
@@ -1879,6 +1908,9 @@ $script:pageText = @{
         commands = 'Comandos personalizados'
         open_commands = 'Abrir gestor'
         commands_tip = 'Abrir el gestor de comandos personalizados'
+        online = 'Multijugador'
+        open_online = 'Terracotta'
+        online_tip = 'Abrir la ventana multijugador de Terracotta (código de sala, sin abrir puertos)'
         launcher_log = 'Registro del lanzador'
         open_launcher_log_tip = 'Abrir el registro de esta sesión del lanzador en el Bloc de notas'
         previous_log = 'Inicio anterior'
@@ -1905,6 +1937,9 @@ $script:pageText = @{
         commands = 'Comandos personalizados'
         open_commands = 'Abrir gerenciador'
         commands_tip = 'Abrir o gerenciador de comandos personalizados'
+        online = 'Multijogador'
+        open_online = 'Terracotta'
+        online_tip = 'Abrir a janela multijogador do Terracotta (código de sala, sem liberar portas)'
         launcher_log = 'Log do launcher'
         open_launcher_log_tip = 'Abrir o log desta sessão do launcher no Bloco de notas'
         previous_log = 'Execução anterior'
@@ -1931,6 +1966,9 @@ $script:pageText = @{
         commands = 'Свои команды'
         open_commands = 'Открыть управление'
         commands_tip = 'Открыть управление своими командами'
+        online = 'Сетевая игра'
+        open_online = 'Terracotta'
+        online_tip = 'Открыть окно сетевой игры Terracotta (код комнаты, без проброса портов)'
         launcher_log = 'Лог лаунчера'
         open_launcher_log_tip = 'Открыть лог этой сессии лаунчера в Блокноте'
         previous_log = 'Прошлый запуск'
@@ -1957,6 +1995,9 @@ $script:pageText = @{
         commands = 'Comandi personalizzati'
         open_commands = 'Apri gestione'
         commands_tip = 'Apri la gestione dei comandi personalizzati'
+        online = 'Multigiocatore'
+        open_online = 'Terracotta'
+        online_tip = 'Apri la finestra multigiocatore di Terracotta (codice stanza, senza aprire porte)'
         launcher_log = 'Log del launcher'
         open_launcher_log_tip = 'Apri il log di questa sessione del launcher nel Blocco note'
         previous_log = 'Avvio precedente'
@@ -1983,6 +2024,9 @@ $script:pageText = @{
         commands = 'Aangepaste opdrachten'
         open_commands = 'Opdrachtenbeheer openen'
         commands_tip = 'Aangepaste opdrachten beheren'
+        online = 'Multiplayer'
+        open_online = 'Terracotta'
+        online_tip = 'Het Terracotta-multiplayer venster openen (kamercode, geen port forwarding)'
         launcher_log = 'Launcherlog'
         open_launcher_log_tip = 'Log van deze launchersessie in Kladblok openen'
         previous_log = 'Vorige start'
@@ -2009,6 +2053,9 @@ $script:pageText = @{
         commands = 'Własne polecenia'
         open_commands = 'Otwórz menedżer'
         commands_tip = 'Otwórz menedżer własnych poleceń'
+        online = 'Wieloosobowa'
+        open_online = 'Terracotta'
+        online_tip = 'Otwórz okno gry wieloosobowej Terracotta (kod pokoju, bez przekierowania portów)'
         launcher_log = 'Dziennik launchera'
         open_launcher_log_tip = 'Otwórz dziennik tej sesji launchera w Notatniku'
         previous_log = 'Poprzednie uruchomienie'
@@ -2035,6 +2082,9 @@ $script:pageText = @{
         commands = 'Özel komutlar'
         open_commands = 'Komut yöneticisini aç'
         commands_tip = 'Özel komut yöneticisini aç'
+        online = 'Çok oyunculu'
+        open_online = 'Terracotta'
+        online_tip = 'Terracotta çok oyunculu penceresini aç (oda kodu, port yönlendirme yok)'
         launcher_log = 'Başlatıcı günlüğü'
         open_launcher_log_tip = 'Bu başlatıcı oturumunun günlüğünü Not Defteri''nde aç'
         previous_log = 'Önceki başlatma'
@@ -2061,6 +2111,9 @@ $script:pageText = @{
         commands = 'Lệnh tùy chỉnh'
         open_commands = 'Mở quản lý lệnh'
         commands_tip = 'Mở trình quản lý lệnh tùy chỉnh'
+        online = 'Nhiều người'
+        open_online = 'Terracotta'
+        online_tip = 'Mở cửa sổ nhiều người của Terracotta (mã phòng, không cần mở cổng)'
         launcher_log = 'Nhật ký trình khởi chạy'
         open_launcher_log_tip = 'Mở nhật ký phiên trình khởi chạy này bằng Notepad'
         previous_log = 'Lần chạy trước'
