@@ -44,6 +44,9 @@ Sub EnsureTools
     If Not fso.FileExists(base & "\VideoWall.ps1") Then need = True
     If Not fso.FileExists(base & "\CommandManager.ps1") Then need = True
     If Not fso.FileExists(base & "\Online.ps1") Then need = True
+    If Not fso.FileExists(base & "\WebView2\Microsoft.Web.WebView2.Core.dll") Then need = True
+    If Not fso.FileExists(base & "\WebView2\Microsoft.Web.WebView2.WinForms.dll") Then need = True
+    If Not fso.FileExists(base & "\WebView2\WebView2Loader.dll") Then need = True
     If Not fso.FileExists(base & "\Pictures\CustomHomeBG.jpg") Then need = True
     If Not need Then Exit Sub
 

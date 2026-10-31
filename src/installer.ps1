@@ -670,6 +670,12 @@ function Get-Seg([string]$c, [string]$a, [string]$b) {
     return $m.Groups[1].Value
 }
 
+function Get-SegBytes([string]$c, [string]$a, [string]$b) {
+    $s = Get-Seg $c $a $b
+    $s = $s -replace '\s', ''
+    return [Convert]::FromBase64String($s)
+}
+
 function Invoke-Install([string]$dir, [string]$flavor, [string]$lang = '') {
     $script:incompatiblePcl = $false
     $script:incompatiblePclVersion = ''
@@ -706,11 +712,16 @@ function Invoke-Install([string]$dir, [string]$flavor, [string]$lang = '') {
     [IO.File]::WriteAllText((Join-Path $dir 'VideoWall.ps1'), (Get-Seg $c 'PS4' 'PS5'), [Text.UTF8Encoding]::new($true))
     [IO.File]::WriteAllText((Join-Path $dir 'CommandManager.ps1'), (Get-Seg $c 'PS5' 'PS6'), [Text.UTF8Encoding]::new($true))
     [IO.File]::WriteAllText((Join-Path $dir 'Online.ps1'), (Get-Seg $c 'PS6' 'VBS'), [Text.UTF8Encoding]::new($true))
-    [IO.File]::WriteAllText((Join-Path $dir 'PCLHomeLaunch.vbs'), (Get-Seg $c 'VBS' 'IMG'), [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $dir 'PCLHomeLaunch.vbs'), (Get-Seg $c 'VBS' 'WVB1'), [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $dir 'CommandManager.lang'), ($lang + "`r`n"), [Text.UTF8Encoding]::new($false))
     foreach ($old in @('InjectDll.ps1', 'InjectDll.lock')) {
         try { Remove-Item -LiteralPath (Join-Path $dir $old) -Force -ErrorAction SilentlyContinue } catch { }
     }
+    $wvDir = Join-Path $dir 'WebView2'
+    [void][IO.Directory]::CreateDirectory($wvDir)
+    try { [IO.File]::WriteAllBytes((Join-Path $wvDir 'Microsoft.Web.WebView2.Core.dll'), (Get-SegBytes $c 'WVB1' 'WVB2')) } catch { }
+    try { [IO.File]::WriteAllBytes((Join-Path $wvDir 'Microsoft.Web.WebView2.WinForms.dll'), (Get-SegBytes $c 'WVB2' 'WVB3')) } catch { }
+    try { [IO.File]::WriteAllBytes((Join-Path $wvDir 'WebView2Loader.dll'), (Get-SegBytes $c 'WVB3' 'IMG')) } catch { }
     $picDir = Join-Path $dir 'Pictures'
     [void][IO.Directory]::CreateDirectory($picDir)
     $img = Get-Seg $c 'IMG' 'END'
@@ -766,6 +777,7 @@ function Invoke-Uninstall([string]$dir, [string]$flavor) {
     foreach ($f in @('Custom.xaml', 'LogView.xaml', 'CustomTools.bat', 'PCLHomeLaunch.vbs', 'RefreshLog.ps1', 'BgRefresh.ps1', 'Egg.ps1', 'VideoWall.ps1', 'CommandManager.ps1', 'Online.ps1', 'CommandManager.lang', 'CustomCommandTarget.json', 'CustomTools.log', 'VideoWall.ready', 'Pictures\CustomHomeBG.jpg', 'Pictures\videoframe_2546.png', 'Pictures\CustomHomeLock.png')) {
         try { Remove-Item -LiteralPath ($dir + '\' + $f) -Force -ErrorAction SilentlyContinue } catch { }
     }
+    try { Remove-Item -LiteralPath ($dir + '\WebView2') -Recurse -Force -ErrorAction SilentlyContinue } catch { }
     # Terracotta itself is a separate program the user may also run from HMCL,
     # so only the copy this installer downloaded is removed.
     foreach ($f in @(Get-ChildItem -LiteralPath ($dir + '\Online') -Filter 'terracotta*.exe' -File -ErrorAction SilentlyContinue) +

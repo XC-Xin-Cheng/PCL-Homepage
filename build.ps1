@@ -50,6 +50,11 @@ $toolFiles = @(
     @{ Name = 'Online.ps1'; Marker = 'PS6' },
     @{ Name = 'PCLHomeLaunch.vbs'; Marker = 'VBS' }
 )
+$wvFiles = @(
+    @{ Name = 'Microsoft.Web.WebView2.Core.dll'; Marker = 'WVB1' },
+    @{ Name = 'Microsoft.Web.WebView2.WinForms.dll'; Marker = 'WVB2' },
+    @{ Name = 'WebView2Loader.dll'; Marker = 'WVB3' }
+)
 $tools = @{}
 foreach ($t in $toolFiles) {
     $tools[$t.Name] = Trim-FinalNewlines (Read-Utf8 (Join-Path $toolsDir $t.Name))
@@ -64,12 +69,22 @@ $payloadLines.Add('')
 $payloadLines.Add('<!--')
 $payloadLines.Add('==== 工具文件内嵌备份 ====')
 $payloadLines.Add('下面保存着 CustomTools.bat、PCLHomeLaunch.vbs、RefreshLog.ps1、BgRefresh.ps1、Egg.ps1、VideoWall.ps1、CommandManager.ps1、Online.ps1 的完整内容，')
+$payloadLines.Add('WebView2 运行时库（Microsoft.Web.WebView2.Core.dll、Microsoft.Web.WebView2.WinForms.dll、WebView2Loader.dll）的 base64 内容，')
 $payloadLines.Add('以及共享背景图 CustomHomeBG.jpg 的 base64 内容；主页按钮或 CustomTools.bat')
 $payloadLines.Add('发现这些文件缺失时，会自动从这份备份重建，并把背景图导入 PCL\Pictures 文件夹。')
 $payloadLines.Add('请勿修改 @@ 标记行，也请勿在本注释内加入连续的两个减号。')
 foreach ($t in $toolFiles) {
     $payloadLines.Add('@@YSM-TOOLS-' + $t.Marker + '@@')
     foreach ($line in ($tools[$t.Name] -split "`n")) { $payloadLines.Add($line) }
+}
+$wvDir = Join-Path $toolsDir 'webview2'
+foreach ($w in $wvFiles) {
+    $payloadLines.Add('@@YSM-TOOLS-' + $w.Marker + '@@')
+    $wvb64 = [IO.File]::ReadAllText((Join-Path $wvDir ($w.Name + '.b64')), [Text.UTF8Encoding]::new($false))
+    foreach ($line in ($wvb64 -split "`n")) {
+        $line = $line.TrimEnd("`r")
+        if ($line -ne '') { $payloadLines.Add($line) }
+    }
 }
 $payloadLines.Add('@@YSM-TOOLS-IMG@@')
 $bgBytes = [IO.File]::ReadAllBytes((Join-Path $toolsDir 'CustomHomeBG.jpg'))
@@ -160,10 +175,19 @@ Assert-True ([Convert]::FromBase64String($img.ToString()).Length -eq $lockBytes.
 $payloadCheck = [IO.File]::ReadAllText($payloadPath, [Text.Encoding]::UTF8)
 for ($ti = 0; $ti -lt $toolFiles.Count; $ti++) {
     $t = $toolFiles[$ti]
-    $next = if ($ti -lt $toolFiles.Count - 1) { $toolFiles[$ti + 1].Marker } else { 'IMG' }
+    $next = if ($ti -lt $toolFiles.Count - 1) { $toolFiles[$ti + 1].Marker } else { 'WVB1' }
     $m = [regex]::Match($payloadCheck, '(?sm)^@@YSM-TOOLS-' + [regex]::Escape($t.Marker) + '@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-' + [regex]::Escape($next) + '@@')
     Assert-True ($m.Success) ('tool marker missing in Custom.xaml: ' + $t.Marker)
     Assert-True ($m.Groups[1].Value -eq $tools[$t.Name]) ('tool text mismatch in Custom.xaml: ' + $t.Name)
+}
+for ($wi = 0; $wi -lt $wvFiles.Count; $wi++) {
+    $w = $wvFiles[$wi]
+    $next = if ($wi -lt $wvFiles.Count - 1) { $wvFiles[$wi + 1].Marker } else { 'IMG' }
+    $wvPath = Join-Path $wvDir ($w.Name + '.b64')
+    $wvContent = [IO.File]::ReadAllText($wvPath, [Text.UTF8Encoding]::new($false)).Replace("`r`n", "`n").TrimEnd("`n")
+    $m = [regex]::Match($payloadCheck, '(?sm)^@@YSM-TOOLS-' + [regex]::Escape($w.Marker) + '@@\r?\n(.*?)\r?\n^@@YSM-TOOLS-' + [regex]::Escape($next) + '@@')
+    Assert-True ($m.Success) ('webview2 marker missing in Custom.xaml: ' + $w.Marker)
+    Assert-True ($m.Groups[1].Value -eq $wvContent) ('webview2 text mismatch in Custom.xaml: ' + $w.Name)
 }
 
 # ==== launcher executable ====
