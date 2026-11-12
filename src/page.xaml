@@ -42,6 +42,7 @@
      文件末尾的内嵌备份注释：保存 CustomTools.bat、PCLHomeLaunch.vbs、RefreshLog.ps1、
      BgRefresh.ps1、Egg.ps1、VideoWall.ps1、CommandManager.ps1 与共享背景图（CustomHomeBG.jpg 的 base64 内容）；
      请勿修改 @@ 标记行，注释内不能出现连续的两个减号。
+      快捷键：G+H（PCL 窗口前台且停留在主页时）用默认浏览器打开作者的 GitHub 仓库列表。
       彩蛋（Shift+X+C，仅在 PCL 窗口前台时）：在无控制台的图形确认框中选择 Yes 后，把主题图片
       设为 Windows 桌面壁纸（PCL\Pictures\CustomHomeBG.jpg），并把锁屏换成同款图片
       （CustomHomeLock.png）；选择 No 则什么都不改。视频桌面壁纸不再使用：新版 Explorer 没有

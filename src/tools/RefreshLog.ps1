@@ -828,6 +828,40 @@ function Start-Egg {
     } catch { }
 }
 
+# Shared native calls for the keyboard shortcuts below.
+function Add-HotkeyNative {
+    if ('PCLHomeEgg' -as [type]) { return }
+    $cs2 = 'using System;using System.Runtime.InteropServices;public static class PCLHomeEgg{[DllImport("user32.dll")]public static extern short GetAsyncKeyState(int k);[DllImport("user32.dll")]public static extern IntPtr GetForegroundWindow();[DllImport("user32.dll")]public static extern int GetWindowThreadProcessId(IntPtr h,out int p);}'
+    Add-Type -TypeDefinition $cs2
+}
+
+# G+H held down while the launcher is on its home page: open the author's
+# GitHub repository list in the default browser.  Only a press in the PCL
+# window counts, so typing G+H in another program never opens anything.
+$script:githubLatched = $false
+function Start-GitHubPage {
+    try {
+        WLog 'github hotkey'
+        Start-Process -FilePath 'https://github.com/XC-Xin-Cheng?tab=repositories' | Out-Null
+    } catch { }
+}
+function Test-GitHubHotkey {
+    try {
+        Add-HotkeyNative
+        $kg = [PCLHomeEgg]::GetAsyncKeyState(0x47) -band 0x8000
+        $kh = [PCLHomeEgg]::GetAsyncKeyState(0x48) -band 0x8000
+        if (-not ($kg -and $kh)) { $script:githubLatched = $false; return }
+        if ($script:githubLatched) { return }
+        $script:githubLatched = $true
+        $pcl = Get-PclWindow
+        if (-not $pcl) { return }
+        $fg = [PCLHomeEgg]::GetForegroundWindow()
+        if ($fg.ToInt64() -ne $pcl.MainWindowHandle.ToInt64()) { return }
+        if ((Get-PclPage) -ne 'Launch') { return }
+        Start-GitHubPage
+    } catch { }
+}
+
 # Shift+X+C held down while PCL runs.  Inside PCL it fires directly; outside
 # it also fires, except when the Minecraft window is in front, so the egg
 # never pops up in the middle of a game.  Polled a few times a second; a
@@ -835,10 +869,7 @@ function Start-Egg {
 $script:eggLatched = $false
 function Test-EggHotkey {
     try {
-        if (-not ('PCLHomeEgg' -as [type])) {
-            $cs2 = 'using System;using System.Runtime.InteropServices;public static class PCLHomeEgg{[DllImport("user32.dll")]public static extern short GetAsyncKeyState(int k);[DllImport("user32.dll")]public static extern IntPtr GetForegroundWindow();[DllImport("user32.dll")]public static extern int GetWindowThreadProcessId(IntPtr h,out int p);}'
-            Add-Type -TypeDefinition $cs2
-        }
+        Add-HotkeyNative
         $sh = [PCLHomeEgg]::GetAsyncKeyState(0x10) -band 0x8000
         $kx = [PCLHomeEgg]::GetAsyncKeyState(0x58) -band 0x8000
         $kc = [PCLHomeEgg]::GetAsyncKeyState(0x43) -band 0x8000
@@ -888,6 +919,7 @@ function Start-Watch {
         for ($tick = 0; $tick -lt 5; $tick++) {
             Start-Sleep -Milliseconds 100
             Test-EggHotkey
+            Test-GitHubHotkey
         }
         $pcl = Get-PclWindow
         $pclNow = [bool]$pcl

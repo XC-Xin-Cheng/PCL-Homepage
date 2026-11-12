@@ -26,6 +26,10 @@ PCL 自定义主页 · 一键安装包（PCL2 / PCL CE 可选）
 6. 点击“安装”。如果该文件夹已经安装过，可以选“覆盖安装”或“卸载”。
 7. 装完后打开对应的启动器就能看到新主页；如果启动器已经开着，按 F5 刷新或重开。
 
+【快捷键】
+在 PCL 主页（PCL 窗口位于前台）同时按住 G 和 H，可用默认浏览器打开
+作者的 GitHub 仓库列表：https://github.com/XC-Xin-Cheng?tab=repositories
+
 【支持的语言】
 简体中文、English、繁體中文、日本語、한국어、Français、Deutsch、Español、
 Português (Brasil)、Русский、Italiano、Nederlands、Polski、Türkçe、Tiếng Việt。
