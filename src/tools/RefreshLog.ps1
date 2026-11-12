@@ -1,15 +1,19 @@
-# RefreshLog.ps1 v11 - rebuilds PCL\LogView.xaml, the log snapshot behind the
+﻿# RefreshLog.ps1 v12 - rebuilds PCL\LogView.xaml, the log snapshot behind the
 # Custom.xaml homepage.  Works with PCL2 (Log1.txt) and PCL CE
 # (Log\Launch-*.log).  Modes:
 #   (default)     one shot: rebuild the snapshot, then press F5 in PCL.
 #   -Watch        background watcher (single instance): rebuilds the snapshot
-#                 and refreshes the homepage every two seconds, presses F5 at
-#                 once when the game starts or stops, when PCL itself is
-#                 (re)started and whenever PCL is brought to the front (only
-#                 when the PCL window is in front and showing its home page,
-#                 so a refresh never reloads another page the user is using;
-#                 the launcher log never triggers a refresh, because page
-#                 reloads themselves append to it);
+#                 every second.  When the launcher supports custom
+#                 homepage live patches (PCL CE 2.15+, or a PCL2 build with the
+#                 same patch), it instead writes the last 23 game log lines to
+#                 PCL\CustomLive.json every half second and never presses F5, so
+#                 the log follows the game without reloading the page.  It
+#                 presses F5 at once when the game starts or stops, when PCL
+#                 itself is (re)started and whenever PCL is brought to the
+#                 front (only when the PCL window is in front and showing its
+#                 home page, so a refresh never reloads another page the user
+#                 is using; the launcher log never triggers a refresh, because
+#                 page reloads themselves append to it);
 #                 it also registers a logon task
 #                 so it comes back after a reboot; while PCL is the focused
 #                 window it listens for the Shift+X+C easter egg and then
@@ -30,11 +34,13 @@
 #                 CustomTools.bat (values are read from config.v1.yml when
 #                 present, otherwise from Setup.ini).
 # Snapshot keys (consumed by the homepage):
-#   LogViewText     game log of the running Minecraft process ('' when none)
-#   PreviousGameLogText  log of the previous game launch ('' when none yet)
+#   LogViewDoc      game log of the running Minecraft process as a document
+#   PreviousGameLogDoc  previous game launch log as a document
 #   PreviousGameLogLabel archive name of that log, e.g. 2026-10-27-1
-#   LauncherLogText launcher log of the current PCL session
+#   LauncherLogDoc  launcher log of the current PCL session as a document
 #   LogHist1..3     start time labels for the previous launcher logs
+# Each document has one paragraph per log line with a two-character hanging
+# indent, so a wrapped continuation line is easy to tell apart from a new line.
 # Offline test switches: PCLTOOLS_NO_REFRESH=1 skips F5, PCLTOOLS_NO_WATCH=1
 # makes -Watch exit at once, PCLTOOLS_FAKE_MC=<dir> pretends a game runs,
 # PCLTOOLS_NO_MC=1 pretends no game runs at all (the fake one wins),
@@ -63,6 +69,7 @@ $script:logPath = $Base + 'CustomTools.log'
 $script:gflag = '-' + '-gameDir'
 $script:mcCache = @{}
 $script:prevCache = @{ Key = ''; Text = ''; Label = '' }
+$script:liveError = ''
 $script:watchMutexName = 'PCLCustomHomeLogWatcher'
 
 function WLog([string]$s) {
@@ -503,6 +510,23 @@ function Esc([string]$s) {
     return $t
 }
 
+function New-LogDocument([string]$key, [string]$text, [string]$indent, [string]$fontSize) {
+    # One paragraph per line gives WPF a hanging indent for wrapped lines:
+    # the first line starts at the left edge, continuation lines start indented.
+    $sb = New-Object System.Text.StringBuilder
+    [void]$sb.Append('<FlowDocument x:Key="' + $key + '" PagePadding="0" ColumnWidth="999999" FontFamily="Consolas, Microsoft YaHei UI" FontSize="' + $fontSize + '" Foreground="#FFE8E8E8" xml:space="preserve">')
+    if ($text) {
+        $lines = [string[]]($text -split "\r\n|\n|\r")
+        foreach ($line in $lines) {
+            $esc = Esc $line
+            if (-not $esc) { $esc = '&#160;' }
+            [void]$sb.Append('<Paragraph Margin="' + $indent + ',0,0,0" TextIndent="-' + $indent + '">' + $esc + '</Paragraph>')
+        }
+    }
+    [void]$sb.Append('</FlowDocument>')
+    return $sb.ToString()
+}
+
 function Reverse-Lines([string]$s) {
     if (-not $s) { return $s }
     $t = $s.TrimEnd("`r", "`n")
@@ -516,10 +540,10 @@ function New-Snapshot([string]$game, [string]$prev, [string]$prevLabel, [string]
     $n = 'xm' + 'lns'
     $d = '<ResourceDictionary ' + $n + '="http://schemas.microsoft.com/winfx/2006/xaml/presentation" ' + $n + ':x="http://schemas.microsoft.com/winfx/2006/xaml" ' + $n + ':sys="clr-namespace:System;assembly=mscorlib">'
     $d = $d + '<sys:String x:Key="LogGen">YSMLOGG8</sys:String>'
-    $d = $d + '<sys:String x:Key="LogViewText" xml:space="preserve">' + (Esc $game) + '</sys:String>'
-    $d = $d + '<sys:String x:Key="PreviousGameLogText" xml:space="preserve">' + (Esc $prev) + '</sys:String>'
+    $d = $d + (New-LogDocument 'LogViewDoc' $game '14' '12')
+    $d = $d + (New-LogDocument 'PreviousGameLogDoc' $prev '14' '12')
     $d = $d + '<sys:String x:Key="PreviousGameLogLabel" xml:space="preserve">' + (Esc $prevLabel) + '</sys:String>'
-    $d = $d + '<sys:String x:Key="LauncherLogText" xml:space="preserve">' + (Esc $launcher) + '</sys:String>'
+    $d = $d + (New-LogDocument 'LauncherLogDoc' $launcher '13' '11.5')
     $d = $d + '<sys:String x:Key="LogHist1" xml:space="preserve">' + (Esc $h1) + '</sys:String>'
     $d = $d + '<sys:String x:Key="LogHist2" xml:space="preserve">' + (Esc $h2) + '</sys:String>'
     $d = $d + '<sys:String x:Key="LogHist3" xml:space="preserve">' + (Esc $h3) + '</sys:String>'
@@ -535,7 +559,7 @@ function Compose-Snapshot {
     }
     # The previous game log only changes when a new launch rotates the files,
     # so its unpacked text is cached on path, size and write time.  Without
-    # the cache the watcher would gunzip the same archive every two seconds.
+    # the cache the watcher would gunzip the same archive every second.
     $prev = ''
     $prevLabel = ''
     $prevLog = Get-PreviousGameLog
@@ -642,6 +666,99 @@ function Get-PclPage {
     foreach ($m in [regex]::Matches($tail, '切换主要页面[：:]\s*([A-Za-z]+)')) { $page = $m.Groups[1].Value }
     if ($page) { return $page }
     return 'Launch'
+}
+
+# ==== live homepage patches ====
+# PCL CE 2.15+ (and local PCL2 builds with the same patch) writes
+# PCL\CustomLive.supported.json once the custom homepage has loaded.  While
+# that marker matches the running launcher, tagged controls can be updated in
+# place, so the watcher never needs to press F5 and the log can follow the
+# game in real time.
+function Test-LiveSupport($pcl) {
+    if (-not $pcl) { return $false }
+    $markerPath = $Base + 'CustomLive.supported.json'
+    if (-not (Test-Path -LiteralPath $markerPath)) { return $false }
+    try {
+        $marker = ConvertFrom-Json ([IO.File]::ReadAllText($markerPath, [Text.Encoding]::UTF8))
+        if ([int]$marker.processId -ne [int]$pcl.Id) { return $false }
+        $markerPathValue = [string]$marker.processPath
+        $runningPath = ''
+        try { $runningPath = [string]$pcl.Path } catch { }
+        if ($markerPathValue -and $runningPath -and ($markerPathValue -ine $runningPath)) { return $false }
+        $patchFile = [string]$marker.patchFile
+        if ($patchFile -and ($patchFile -ine 'CustomLive.json')) { return $false }
+        return $true
+    } catch { return $false }
+}
+
+# Last <count> complete lines of a text file, read from a bounded tail.  The
+# first line is dropped when the read started in the middle of it.
+function Read-TailLines([string]$path, [int]$cap, [int]$count) {
+    $out = @()
+    try {
+        $fs = [IO.File]::Open($path, [IO.FileMode]::Open, [IO.FileAccess]::Read, ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+        try {
+            $len = [int64]$fs.Length
+            $start = [int64]0
+            if ($len -gt $cap) { $start = $len - $cap }
+            $fs.Position = $start
+            $buf = New-Object byte[] ([int]($len - $start))
+            $read = $fs.Read($buf, 0, $buf.Length)
+            $text = Decode-LogText $buf $read
+            $text = $text.TrimStart([char]0xFEFF)
+            if ($start -gt 0) {
+                $i = $text.IndexOf([char]10)
+                if ($i -ge 0) { $text = $text.Substring($i + 1) }
+            }
+            if ($text) {
+                $lines = [string[]](($text.TrimEnd("`r", "`n")) -split "\r\n|\n|\r")
+                if ($lines.Count -gt $count) {
+                    $first = $lines.Count - $count
+                    $lines = $lines[$first..($lines.Count - 1)]
+                }
+                $out = $lines
+            }
+        } finally { $fs.Close() }
+    } catch { $out = @() }
+    return @($out)
+}
+
+function Get-GameLiveLines($mc, [int]$count) {
+    if (-not $mc -or -not $mc.Dir) { return @() }
+    $path = Join-Path (Join-Path $mc.Dir 'logs') 'latest.log'
+    return Read-TailLines $path 65536 $count
+}
+
+# One patch updates all 23 line slots plus the visibility switch, so a slow
+# renderer never shows the live and snapshot views at the same time.
+function Write-LivePatch([string[]]$lines, [bool]$showLive) {
+    $patches = New-Object System.Collections.Generic.List[object]
+    if ($showLive) {
+        $patches.Add(@{ target = 'pcl-log-live'; visibility = 'Visible' })
+        $patches.Add(@{ target = 'pcl-log-snapshot'; visibility = 'Collapsed' })
+    }
+    for ($i = 0; $i -lt 23; $i++) {
+        $text = ''
+        if ($i -lt $lines.Count) { $text = [string]$lines[$i] }
+        $patches.Add(@{ target = ('pcl-log-' + $i.ToString('00')); text = $text })
+    }
+    $json = @{ patches = [object[]]$patches.ToArray() } | ConvertTo-Json -Depth 4 -Compress
+    $dest = $Base + 'CustomLive.json'
+    $tmp = $dest + '.tmp'
+    try {
+        [IO.File]::WriteAllText($tmp, $json, [Text.UTF8Encoding]::new($false))
+        if ([IO.File]::Exists($dest)) { [IO.File]::Delete($dest) }
+        [IO.File]::Move($tmp, $dest)
+        $script:liveError = ''
+        return $true
+    } catch {
+        $message = [string]$_.Exception.Message
+        if ($message -ne $script:liveError) {
+            WLog ('live patch write failed: ' + $message)
+            $script:liveError = $message
+        }
+        return $false
+    }
 }
 
 # ==== watch mode ====
@@ -759,10 +876,16 @@ function Start-Watch {
     $frontDue = $false
     $lastF5 = [DateTime]::MinValue
     $lastHeld = [DateTime]::MinValue
-    # One cycle is two seconds: rebuild the snapshot and refresh the page.
+    $liveShown = $false
+    $livePrevious = $false
+    $lastLiveKey = '<init>'
+    $snapshotDue = $true
+    $cycle = 0
+    # One cycle is half a second: the live tail (when supported) is written every
+    # cycle, while the fallback snapshot is rebuilt every other cycle (one second).
     # The easter-egg hotkey is still polled every 100 ms inside the cycle.
     while ($true) {
-        for ($tick = 0; $tick -lt 20; $tick++) {
+        for ($tick = 0; $tick -lt 5; $tick++) {
             Start-Sleep -Milliseconds 100
             Test-EggHotkey
         }
@@ -783,7 +906,7 @@ function Start-Watch {
             $pclFront = $frontNow
         } elseif ($frontNow -ne $pclFront) {
             $pclFront = $frontNow
-            if ($frontNow) { $frontDue = $true; WLog 'PCL became foreground' }
+            if ($frontNow) { $frontDue = $true; $snapshotDue = $true; WLog 'PCL became foreground' }
         }
         $mc = Get-McInfo
         $mcKey = 'none'
@@ -792,7 +915,7 @@ function Start-Watch {
             if ($mc.Dir) { $mcKey = $mcKey + ' ' + $mc.Dir }
         }
         if ($mcKey -ne $lastMc) {
-            if ($lastMc -ne '<init>') { $f5Pending = $true }
+            if ($lastMc -ne '<init>') { $f5Pending = $true; $snapshotDue = $true }
             WLog ('game state: ' + $mcKey)
             $lastMc = $mcKey
         }
@@ -801,15 +924,53 @@ function Start-Watch {
             if ($lastGameLog -ne '<init>' -and $gameLog) { $autoDue = $true }
             $lastGameLog = $gameLog
         }
-        # Keep the stored snapshot current once per cycle.  Only a change in
-        # the GAME log schedules an automatic F5.  The launcher log grows with
-        # every page reload, so it must never drive the refresh itself.
-        Save-Snapshot (Compose-Snapshot) | Out-Null
+        # PCL CE 2.15+ can apply PCL\CustomLive.json in place.  Keep the 23
+        # line slots current and stop scheduling F5 while that works.
+        $live = Test-LiveSupport $pcl
+        if ($live -ne $livePrevious) {
+            $livePrevious = $live
+            $snapshotDue = $true
+        }
+        if ($live) {
+            $liveLines = @(Get-GameLiveLines $mc 23)
+            $liveKey = ($liveLines -join "`n")
+            if ((-not $liveShown) -or ($liveKey -ne $lastLiveKey)) {
+                if (Write-LivePatch $liveLines $true) {
+                    if (-not $liveShown) { WLog 'live homepage patch enabled' }
+                    $liveShown = $true
+                    $lastLiveKey = $liveKey
+                }
+            }
+            # A live page must not be reloaded: F5 would throw away the slots.
+            $f5Pending = $false
+            $autoDue = $false
+            $frontDue = $false
+        } elseif ($liveShown) {
+            $liveShown = $false
+            $lastLiveKey = '<init>'
+            $frontDue = $true
+            $snapshotDue = $true
+            WLog 'live homepage patch disabled'
+        }
+        # Keep the stored snapshot current.  Only a change in the GAME log
+        # schedules an automatic F5.  The launcher log grows with every page
+        # reload, so it must never drive the refresh itself.  While the live
+        # patch is active the snapshot is hidden, so rebuild it every ten
+        # seconds instead of every second; that leaves the half-second live
+        # update loop with enough time to keep the 23 slots current.
+        $cycle += 1
+        $snapshotEvery = 2
+        if ($live) { $snapshotEvery = 20 }
+        if ($snapshotDue -or (($cycle % $snapshotEvery) -eq 0)) {
+            Save-Snapshot (Compose-Snapshot) | Out-Null
+            $snapshotDue = $false
+        }
         # Refresh the page: every cycle while something is pending, and once
         # more whenever the launcher is brought to the front.  The F5 itself
         # only lands while the PCL window is in front, so the game never
-        # loses focus to a background refresh.
-        if (($f5Pending -or $autoDue -or $frontDue) -and $pclNow -and -not $env:PCLTOOLS_NO_REFRESH) {
+        # loses focus to a background refresh.  Live patching replaces this
+        # path entirely while it is available.
+        if (-not $live -and ($f5Pending -or $autoDue -or $frontDue) -and $pclNow -and -not $env:PCLTOOLS_NO_REFRESH) {
             $gap = 2
             if (([DateTime]::Now - $lastF5).TotalSeconds -gt $gap) {
                 $page = Get-PclPage

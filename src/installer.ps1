@@ -770,8 +770,16 @@ function Invoke-Uninstall([string]$dir, [string]$flavor) {
     }
     Stop-Watchers $dir
     if (-not $script:testMode) {
+        # Remove only the logon entries that belong to this data folder.  When
+        # both PCL2 and PCL CE have the homepage installed, uninstalling one
+        # must leave the other launcher's watcher entry untouched.
+        $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
         foreach ($n in @('PCLCustomHomeWatch', 'PCLCustomHomeVideoWall')) {
-            try { Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name $n -ErrorAction SilentlyContinue } catch { }
+            $value = ''
+            try { $value = [string](Get-ItemPropertyValue -Path $runKey -Name $n -ErrorAction Stop) } catch { }
+            if ($value -and $value.IndexOf($dir.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                try { Remove-ItemProperty -Path $runKey -Name $n -ErrorAction SilentlyContinue } catch { }
+            }
         }
     }
     foreach ($f in @('Custom.xaml', 'LogView.xaml', 'CustomTools.bat', 'PCLHomeLaunch.vbs', 'RefreshLog.ps1', 'BgRefresh.ps1', 'Egg.ps1', 'VideoWall.ps1', 'CommandManager.ps1', 'Online.ps1', 'CommandManager.lang', 'CustomCommandTarget.json', 'CustomTools.log', 'VideoWall.ready', 'Pictures\CustomHomeBG.jpg', 'Pictures\videoframe_2546.png', 'Pictures\CustomHomeLock.png')) {
@@ -823,15 +831,15 @@ $script:guiText = @{
         flavor_pcl_desc = 'Original PCL2 · uses Setup.ini'
         flavor_ce_title = 'PCL CE'
         flavor_ce_desc = 'Community Edition · uses config.v1.yml'
-        step_folder = 'Choose data folder'
-        folder_hint = 'Folder with Setup.ini or config.v1.yml; the launcher root also works.'
+        step_folder = 'Choose install location'
+        folder_hint = 'The installer will install {0} into the following folder.'
         path_cue = 'e.g. D:\PCL-CE\PCL'
         browse = 'Browse...'
         detect = 'Detect'
         install = 'Install'
         reinstall = 'Reinstall'
         uninstall = 'Uninstall'
-        exit = 'Exit'
+        exit = 'Cancel'
         status_ready = 'Choose a launcher and data folder.'
         status_detected = 'Detected: {0} · {1}'
         status_folder_ready = 'Data folder ready: {0}'
@@ -864,13 +872,19 @@ $script:guiText = @{
         browse_desc_pcl = 'Select the PCL2 data folder (contains Setup.ini)'
         browse_desc_ce = 'Select the PCL CE data folder (contains config.v1.yml)'
         browse_desc_any = 'Select the PCL data folder (contains Setup.ini or config.v1.yml)'
-        footer = 'PCL Custom Homepage · v1.4 · 15 languages · only the selected launcher config is modified'
+        footer = 'PCL Custom Homepage · v1.9 · 15 languages'
         incompatible_pcl = "Installing a custom homepage for this PCL version is no longer meaningful.`nNo changes have been made to your computer."
         status_incompatible = "This PCL version is not supported. No changes were made."
         flavor_pcl = 'PCL2 (Original)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Language'
         home_lang_note = 'Homepage: {0}'
+        product_name = 'PCL Custom Homepage'
+        window_title = 'Install - {0} version {1}'
+        wizard_location_question = 'Where do you want to install {0}?'
+        wizard_location_hint = 'Click Next to continue. To choose another folder, click Browse.'
+        wizard_space = 'At least {0} MB of free disk space is required.'
+        next = 'Next >'
     }
     'zh-CN' = @{
         app_title = 'PCL 自定义主页安装器'
@@ -881,15 +895,15 @@ $script:guiText = @{
         flavor_pcl_desc = '原版 PCL2 · 使用 Setup.ini'
         flavor_ce_title = 'PCL CE'
         flavor_ce_desc = '社区版 · 使用 config.v1.yml'
-        step_folder = '选择数据文件夹'
-        folder_hint = '选择包含 Setup.ini 或 config.v1.yml 的 PCL 文件夹；也可以直接选择启动器根目录。'
+        step_folder = '选择目标位置'
+        folder_hint = '安装程序将安装 {0} 到下面的文件夹中。'
         path_cue = '例如：D:\PCL-CE\PCL'
         browse = '浏览...'
         detect = '检测'
         install = '安装'
         reinstall = '覆盖安装'
         uninstall = '卸载'
-        exit = '退出'
+        exit = '取消'
         status_ready = '请选择启动器和数据文件夹。'
         status_detected = '已识别：{0} · {1}'
         status_folder_ready = '数据文件夹已就绪：{0}'
@@ -922,13 +936,19 @@ $script:guiText = @{
         browse_desc_pcl = '请选择 PCL2 的数据文件夹（包含 Setup.ini）'
         browse_desc_ce = '请选择 PCL CE 的数据文件夹（包含 config.v1.yml）'
         browse_desc_any = '请选择 PCL 数据文件夹（包含 Setup.ini 或 config.v1.yml）'
-        footer = 'PCL 自定义主页 · v1.4 · 15 种语言 · 仅修改所选启动器的配置'
+        footer = 'PCL 自定义主页 · v1.9 · 15 种语言'
         incompatible_pcl = "你这个版本的PCL安装主页已经没有意义了`n未对您的计算机进行更改"
         status_incompatible = "不支持此 PCL 版本。未对计算机进行更改。"
         flavor_pcl = 'PCL2（原版）'
         flavor_ce = 'PCL CE'
         lang_caption = '语言'
         home_lang_note = '主页语言：{0}'
+        product_name = 'PCL 自定义主页'
+        window_title = '安装 - {0} 版本 {1}'
+        wizard_location_question = '您想将 {0} 安装在哪里？'
+        wizard_location_hint = '点击“下一步”继续。如果您想选择其他文件夹，点击“浏览”。'
+        wizard_space = '至少需要有 {0} MB 的可用磁盘空间。'
+        next = '下一步 >'
     }
     'zh-TW' = @{
         app_title = 'PCL 自訂主頁安裝器'
@@ -939,15 +959,15 @@ $script:guiText = @{
         flavor_pcl_desc = '原版 PCL2 · 使用 Setup.ini'
         flavor_ce_title = 'PCL CE'
         flavor_ce_desc = '社群版 · 使用 config.v1.yml'
-        step_folder = '選擇資料夾'
-        folder_hint = '選擇包含 Setup.ini 或 config.v1.yml 的 PCL 資料夾；也可以直接選擇啟動器根目錄。'
+        step_folder = '選擇目標位置'
+        folder_hint = '安裝程式將安裝 {0} 到下面的資料夾中。'
         path_cue = '例如：D:\PCL-CE\PCL'
         browse = '瀏覽...'
         detect = '偵測'
         install = '安裝'
         reinstall = '覆蓋安裝'
         uninstall = '解除安裝'
-        exit = '結束'
+        exit = '取消'
         status_ready = '請選擇啟動器和資料夾。'
         status_detected = '已辨識：{0} · {1}'
         status_folder_ready = '資料夾已就緒：{0}'
@@ -980,13 +1000,19 @@ $script:guiText = @{
         browse_desc_pcl = '請選擇 PCL2 的資料夾（包含 Setup.ini）'
         browse_desc_ce = '請選擇 PCL CE 的資料夾（包含 config.v1.yml）'
         browse_desc_any = '請選擇 PCL 資料夾（包含 Setup.ini 或 config.v1.yml）'
-        footer = 'PCL 自訂主頁 · v1.4 · 15 種語言 · 僅修改所選啟動器的設定'
+        footer = 'PCL 自訂主頁 · v1.9 · 15 種語言'
         incompatible_pcl = "你這個版本的 PCL 安裝主頁已經沒有意義了`n未對您的電腦進行任何變更"
         status_incompatible = "不支援此 PCL 版本。未對電腦進行任何變更。"
         flavor_pcl = 'PCL2（原版）'
         flavor_ce = 'PCL CE'
         lang_caption = '語言'
         home_lang_note = '主頁語言：{0}'
+        product_name = 'PCL 自訂主頁'
+        window_title = '安裝 - {0} 版本 {1}'
+        wizard_location_question = '您想將 {0} 安裝在哪裡？'
+        wizard_location_hint = '點擊「下一步」繼續。如果您想選擇其他資料夾，點擊「瀏覽」。'
+        wizard_space = '至少需要有 {0} MB 的可用磁碟空間。'
+        next = '下一步 >'
     }
     'ja' = @{
         app_title = 'PCL ホームページ インストーラー'
@@ -997,15 +1023,15 @@ $script:guiText = @{
         flavor_pcl_desc = 'オリジナル PCL2 · Setup.ini を使用'
         flavor_ce_title = 'PCL CE'
         flavor_ce_desc = 'コミュニティ版 · config.v1.yml を使用'
-        step_folder = 'データフォルダーを選択'
-        folder_hint = 'Setup.ini または config.v1.yml を含む PCL フォルダー（ランチャーのルートも可）。'
+        step_folder = 'インストール先を選択'
+        folder_hint = 'インストーラーは {0} を次のフォルダーにインストールします。'
         path_cue = '例：D:\PCL-CE\PCL'
         browse = '参照...'
         detect = '検出'
         install = 'インストール'
         reinstall = '上書きインストール'
         uninstall = 'アンインストール'
-        exit = '終了'
+        exit = 'キャンセル'
         status_ready = 'ランチャーとデータフォルダーを選択してください。'
         status_detected = '検出：{0} · {1}'
         status_folder_ready = 'データフォルダーの準備ができました：{0}'
@@ -1038,13 +1064,19 @@ $script:guiText = @{
         browse_desc_pcl = 'PCL2 のデータフォルダーを選択（Setup.ini を含む）'
         browse_desc_ce = 'PCL CE のデータフォルダーを選択（config.v1.yml を含む）'
         browse_desc_any = 'PCL データフォルダーを選択（Setup.ini または config.v1.yml を含む）'
-        footer = 'PCL カスタムホームページ · v1.4 · 15 言語 · 選択したランチャーの設定のみ変更'
+        footer = 'PCL カスタムホームページ · v1.9 · 15 言語'
         incompatible_pcl = "このバージョンの PCL では、カスタムホームページをインストールしても意味がありません。`nコンピューターには何も変更を加えていません。"
         status_incompatible = "この PCL バージョンはサポートされていません。変更は行われていません。"
         flavor_pcl = 'PCL2（オリジナル）'
         flavor_ce = 'PCL CE'
         lang_caption = '言語'
         home_lang_note = 'ホームページ：{0}'
+        product_name = 'PCL カスタムホームページ'
+        window_title = 'インストール - {0} バージョン {1}'
+        wizard_location_question = '{0} をどこにインストールしますか？'
+        wizard_location_hint = '「次へ」をクリックして続行します。別のフォルダーを選ぶには「参照」をクリックしてください。'
+        wizard_space = '少なくとも {0} MB の空きディスク容量が必要です。'
+        next = '次へ >'
     }
     'ko' = @{
         app_title = 'PCL 홈페이지 설치 프로그램'
@@ -1055,15 +1087,15 @@ $script:guiText = @{
         flavor_pcl_desc = '원본 PCL2 · Setup.ini 사용'
         flavor_ce_title = 'PCL CE'
         flavor_ce_desc = '커뮤니티 에디션 · config.v1.yml 사용'
-        step_folder = '데이터 폴더 선택'
-        folder_hint = 'Setup.ini 또는 config.v1.yml이 있는 PCL 폴더 (런처 루트도 가능).'
+        step_folder = '설치 위치 선택'
+        folder_hint = '설치 프로그램이 {0}을(를) 다음 폴더에 설치합니다.'
         path_cue = '예: D:\PCL-CE\PCL'
         browse = '찾아보기...'
         detect = '감지'
         install = '설치'
         reinstall = '덮어쓰기 설치'
         uninstall = '제거'
-        exit = '종료'
+        exit = '취소'
         status_ready = '런처와 데이터 폴더를 선택하세요.'
         status_detected = '감지됨: {0} · {1}'
         status_folder_ready = '데이터 폴더가 준비되었습니다: {0}'
@@ -1096,13 +1128,19 @@ $script:guiText = @{
         browse_desc_pcl = 'PCL2 데이터 폴더 선택 (Setup.ini 포함)'
         browse_desc_ce = 'PCL CE 데이터 폴더 선택 (config.v1.yml 포함)'
         browse_desc_any = 'PCL 데이터 폴더 선택 (Setup.ini 또는 config.v1.yml 포함)'
-        footer = 'PCL 사용자 지정 홈페이지 · v1.4 · 15개 언어 · 선택한 런처 설정만 수정'
+        footer = 'PCL 사용자 지정 홈페이지 · v1.9 · 15개 언어'
         incompatible_pcl = "이 버전의 PCL에서는 사용자 지정 홈페이지를 설치해도 의미가 없습니다.`n컴퓨터에 아무런 변경도 적용하지 않았습니다."
         status_incompatible = "이 PCL 버전은 지원되지 않습니다. 변경 사항은 없습니다."
         flavor_pcl = 'PCL2 (원본)'
         flavor_ce = 'PCL CE'
         lang_caption = '언어'
         home_lang_note = '홈페이지: {0}'
+        product_name = 'PCL 사용자 지정 홈페이지'
+        window_title = '설치 - {0} 버전 {1}'
+        wizard_location_question = '{0}을(를) 어디에 설치하시겠습니까?'
+        wizard_location_hint = '계속하려면 "다음"을 클릭하세요. 다른 폴더를 선택하려면 "찾아보기"를 클릭하세요.'
+        wizard_space = '최소 {0} MB의 사용 가능한 디스크 공간이 필요합니다.'
+        next = '다음 >'
     }
     'fr' = @{
         app_title = 'Installateur de page d''accueil PCL'
@@ -1113,15 +1151,15 @@ $script:guiText = @{
         flavor_pcl_desc = 'PCL2 original · utilise Setup.ini'
         flavor_ce_title = 'PCL CE'
         flavor_ce_desc = 'Édition communautaire · utilise config.v1.yml'
-        step_folder = 'Choisir le dossier de données'
-        folder_hint = 'Dossier contenant Setup.ini ou config.v1.yml ; la racine du lanceur convient aussi.'
+        step_folder = 'Choisir l''emplacement'
+        folder_hint = 'L''installateur va installer {0} dans le dossier suivant.'
         path_cue = 'ex. : D:\PCL-CE\PCL'
         browse = 'Parcourir...'
         detect = 'Détecter'
         install = 'Installer'
         reinstall = 'Réinstaller'
         uninstall = 'Désinstaller'
-        exit = 'Quitter'
+        exit = 'Annuler'
         status_ready = 'Choisissez un lanceur et un dossier de données.'
         status_detected = 'Détecté : {0} · {1}'
         status_folder_ready = 'Dossier de données prêt : {0}'
@@ -1154,13 +1192,19 @@ $script:guiText = @{
         browse_desc_pcl = 'Sélectionnez le dossier de données PCL2 (contient Setup.ini)'
         browse_desc_ce = 'Sélectionnez le dossier de données PCL CE (contient config.v1.yml)'
         browse_desc_any = 'Sélectionnez le dossier de données PCL (contient Setup.ini ou config.v1.yml)'
-        footer = 'Page d''accueil PCL · v1.4 · 15 langues · seul le profil du lanceur choisi est modifié'
+        footer = 'Page d''accueil PCL · v1.9 · 15 langues'
         incompatible_pcl = "Installer une page d'accueil personnalisée pour cette version de PCL n'a plus de sens.`nAucune modification n'a été apportée à votre ordinateur."
         status_incompatible = "Cette version de PCL n'est pas prise en charge. Aucune modification n'a été apportée."
         flavor_pcl = 'PCL2 (original)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Langue'
         home_lang_note = 'Page d''accueil : {0}'
+        product_name = 'Page d''accueil PCL'
+        window_title = 'Installation - {0} version {1}'
+        wizard_location_question = 'Où voulez-vous installer {0} ?'
+        wizard_location_hint = 'Cliquez sur Suivant pour continuer. Pour choisir un autre dossier, cliquez sur Parcourir.'
+        wizard_space = 'Au moins {0} Mo d''espace disque disponible sont nécessaires.'
+        next = 'Suivant >'
     }
     'de' = @{
         app_title = 'PCL Startseiten-Installation'
@@ -1171,15 +1215,15 @@ $script:guiText = @{
         flavor_pcl_desc = 'Original PCL2 · verwendet Setup.ini'
         flavor_ce_title = 'PCL CE'
         flavor_ce_desc = 'Community Edition · verwendet config.v1.yml'
-        step_folder = 'Datenordner auswählen'
-        folder_hint = 'Ordner mit Setup.ini oder config.v1.yml; der Launcher-Stammordner geht auch.'
+        step_folder = 'Installationsordner wählen'
+        folder_hint = 'Das Installationsprogramm installiert {0} in den folgenden Ordner.'
         path_cue = 'z. B. D:\PCL-CE\PCL'
         browse = 'Durchsuchen...'
         detect = 'Erkennen'
         install = 'Installieren'
         reinstall = 'Neu installieren'
         uninstall = 'Deinstallieren'
-        exit = 'Beenden'
+        exit = 'Abbrechen'
         status_ready = 'Wähle einen Launcher und einen Datenordner.'
         status_detected = 'Erkannt: {0} · {1}'
         status_folder_ready = 'Datenordner bereit: {0}'
@@ -1212,13 +1256,19 @@ $script:guiText = @{
         browse_desc_pcl = 'PCL2-Datenordner auswählen (enthält Setup.ini)'
         browse_desc_ce = 'PCL CE-Datenordner auswählen (enthält config.v1.yml)'
         browse_desc_any = 'PCL-Datenordner auswählen (enthält Setup.ini oder config.v1.yml)'
-        footer = 'PCL Startseite · v1.4 · 15 Sprachen · nur die Konfiguration des gewählten Launchers wird geändert'
+        footer = 'PCL Startseite · v1.9 · 15 Sprachen'
         incompatible_pcl = "Das Installieren einer benutzerdefinierten Startseite für diese PCL-Version ist nicht mehr sinnvoll.`nEs wurden keine Änderungen an Ihrem Computer vorgenommen."
         status_incompatible = "Diese PCL-Version wird nicht unterstützt. Es wurden keine Änderungen vorgenommen."
         flavor_pcl = 'PCL2 (Original)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Sprache'
         home_lang_note = 'Startseite: {0}'
+        product_name = 'PCL Startseite'
+        window_title = 'Installation - {0} Version {1}'
+        wizard_location_question = 'Wo möchten Sie {0} installieren?'
+        wizard_location_hint = 'Klicken Sie auf Weiter, um fortzufahren. Um einen anderen Ordner zu wählen, klicken Sie auf Durchsuchen.'
+        wizard_space = 'Es werden mindestens {0} MB freier Speicherplatz benötigt.'
+        next = 'Weiter >'
     }
     'es' = @{
         app_title = 'Instalador de inicio PCL'
@@ -1229,15 +1279,15 @@ $script:guiText = @{
         flavor_pcl_desc = 'PCL2 original · usa Setup.ini'
         flavor_ce_title = 'PCL CE'
         flavor_ce_desc = 'Edición comunitaria · usa config.v1.yml'
-        step_folder = 'Elegir carpeta de datos'
-        folder_hint = 'Carpeta con Setup.ini o config.v1.yml; también sirve la raíz del lanzador.'
+        step_folder = 'Elegir ubicación'
+        folder_hint = 'El instalador instalará {0} en la siguiente carpeta.'
         path_cue = 'p. ej.: D:\PCL-CE\PCL'
         browse = 'Examinar...'
         detect = 'Detectar'
         install = 'Instalar'
         reinstall = 'Reinstalar'
         uninstall = 'Desinstalar'
-        exit = 'Salir'
+        exit = 'Cancelar'
         status_ready = 'Elige un lanzador y una carpeta de datos.'
         status_detected = 'Detectado: {0} · {1}'
         status_folder_ready = 'Carpeta de datos lista: {0}'
@@ -1270,13 +1320,19 @@ $script:guiText = @{
         browse_desc_pcl = 'Selecciona la carpeta de datos de PCL2 (contiene Setup.ini)'
         browse_desc_ce = 'Selecciona la carpeta de datos de PCL CE (contiene config.v1.yml)'
         browse_desc_any = 'Selecciona la carpeta de datos de PCL (contiene Setup.ini o config.v1.yml)'
-        footer = 'Página de inicio PCL · v1.4 · 15 idiomas · solo se modifica la configuración del lanzador elegido'
+        footer = 'Página de inicio PCL · v1.9 · 15 idiomas'
         incompatible_pcl = "Instalar una página de inicio personalizada para esta versión de PCL ya no tiene sentido.`nNo se ha realizado ningún cambio en su equipo."
         status_incompatible = "Esta versión de PCL no es compatible. No se realizó ningún cambio."
         flavor_pcl = 'PCL2 (original)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Idioma'
         home_lang_note = 'Página de inicio: {0}'
+        product_name = 'Página de inicio PCL'
+        window_title = 'Instalación - {0} versión {1}'
+        wizard_location_question = '¿Dónde quieres instalar {0}?'
+        wizard_location_hint = 'Haz clic en Siguiente para continuar. Para elegir otra carpeta, haz clic en Examinar.'
+        wizard_space = 'Se necesitan al menos {0} MB de espacio libre en disco.'
+        next = 'Siguiente >'
     }
     'pt-BR' = @{
         app_title = 'Instalador de página PCL'
@@ -1287,15 +1343,15 @@ $script:guiText = @{
         flavor_pcl_desc = 'PCL2 original · usa Setup.ini'
         flavor_ce_title = 'PCL CE'
         flavor_ce_desc = 'Edição da comunidade · usa config.v1.yml'
-        step_folder = 'Escolher pasta de dados'
-        folder_hint = 'Pasta com Setup.ini ou config.v1.yml; a raiz do launcher também serve.'
+        step_folder = 'Escolher local de instalação'
+        folder_hint = 'O instalador instalará o {0} na seguinte pasta.'
         path_cue = 'ex.: D:\PCL-CE\PCL'
         browse = 'Procurar...'
         detect = 'Detectar'
         install = 'Instalar'
         reinstall = 'Reinstalar'
         uninstall = 'Desinstalar'
-        exit = 'Sair'
+        exit = 'Cancelar'
         status_ready = 'Escolha um launcher e uma pasta de dados.'
         status_detected = 'Detectado: {0} · {1}'
         status_folder_ready = 'Pasta de dados pronta: {0}'
@@ -1328,13 +1384,19 @@ $script:guiText = @{
         browse_desc_pcl = 'Selecione a pasta de dados do PCL2 (contém Setup.ini)'
         browse_desc_ce = 'Selecione a pasta de dados do PCL CE (contém config.v1.yml)'
         browse_desc_any = 'Selecione a pasta de dados do PCL (contém Setup.ini ou config.v1.yml)'
-        footer = 'Página inicial do PCL · v1.4 · 15 idiomas · apenas a configuração do launcher selecionado é alterada'
+        footer = 'Página inicial do PCL · v1.9 · 15 idiomas'
         incompatible_pcl = "Instalar uma página inicial personalizada para esta versão do PCL não faz mais sentido.`nNenhuma alteração foi feita no seu computador."
         status_incompatible = "Esta versão do PCL não é compatível. Nenhuma alteração foi feita."
         flavor_pcl = 'PCL2 (original)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Idioma'
         home_lang_note = 'Página inicial: {0}'
+        product_name = 'Página inicial PCL'
+        window_title = 'Instalação - {0} versão {1}'
+        wizard_location_question = 'Onde você deseja instalar o {0}?'
+        wizard_location_hint = 'Clique em Avançar para continuar. Para escolher outra pasta, clique em Procurar.'
+        wizard_space = 'São necessários pelo menos {0} MB de espaço livre em disco.'
+        next = 'Avançar >'
     }
     'ru' = @{
         app_title = 'Установщик главной PCL'
@@ -1345,15 +1407,15 @@ $script:guiText = @{
         flavor_pcl_desc = 'Оригинальный PCL2 · использует Setup.ini'
         flavor_ce_title = 'PCL CE'
         flavor_ce_desc = 'Community Edition · использует config.v1.yml'
-        step_folder = 'Выберите папку данных'
-        folder_hint = 'Папка с Setup.ini или config.v1.yml; корень лаунчера тоже подходит.'
+        step_folder = 'Выбор папки установки'
+        folder_hint = 'Установщик установит {0} в следующую папку.'
         path_cue = 'например: D:\PCL-CE\PCL'
         browse = 'Обзор...'
         detect = 'Определить'
         install = 'Установить'
         reinstall = 'Переустановить'
         uninstall = 'Удалить'
-        exit = 'Выход'
+        exit = 'Отмена'
         status_ready = 'Выберите лаунчер и папку данных.'
         status_detected = 'Определено: {0} · {1}'
         status_folder_ready = 'Папка данных готова: {0}'
@@ -1386,13 +1448,19 @@ $script:guiText = @{
         browse_desc_pcl = 'Выберите папку данных PCL2 (содержит Setup.ini)'
         browse_desc_ce = 'Выберите папку данных PCL CE (содержит config.v1.yml)'
         browse_desc_any = 'Выберите папку данных PCL (содержит Setup.ini или config.v1.yml)'
-        footer = 'Домашняя страница PCL · v1.4 · 15 языков · изменяется только конфигурация выбранного лаунчера'
+        footer = 'Домашняя страница PCL · v1.9 · 15 языков'
         incompatible_pcl = "Устанавливать пользовательскую главную страницу для этой версии PCL больше не имеет смысла.`nВаш компьютер не был изменён."
         status_incompatible = "Эта версия PCL не поддерживается. Изменения не вносились."
         flavor_pcl = 'PCL2 (оригинал)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Язык'
         home_lang_note = 'Главная: {0}'
+        product_name = 'Домашняя страница PCL'
+        window_title = 'Установка - {0} версия {1}'
+        wizard_location_question = 'Куда установить {0}?'
+        wizard_location_hint = 'Нажмите «Далее», чтобы продолжить. Чтобы выбрать другую папку, нажмите «Обзор».'
+        wizard_space = 'Требуется не менее {0} МБ свободного места на диске.'
+        next = 'Далее >'
     }
     'it' = @{
         app_title = 'Installatore homepage PCL'
@@ -1403,15 +1471,15 @@ $script:guiText = @{
         flavor_pcl_desc = 'PCL2 originale · usa Setup.ini'
         flavor_ce_title = 'PCL CE'
         flavor_ce_desc = 'Edizione community · usa config.v1.yml'
-        step_folder = 'Scegli la cartella dati'
-        folder_hint = 'Cartella con Setup.ini o config.v1.yml; va bene anche la radice del launcher.'
+        step_folder = 'Scegli la posizione'
+        folder_hint = 'Il programma di installazione installerà {0} nella seguente cartella.'
         path_cue = 'es.: D:\PCL-CE\PCL'
         browse = 'Sfoglia...'
         detect = 'Rileva'
         install = 'Installa'
         reinstall = 'Reinstalla'
         uninstall = 'Disinstalla'
-        exit = 'Esci'
+        exit = 'Annulla'
         status_ready = 'Scegli un launcher e una cartella dati.'
         status_detected = 'Rilevato: {0} · {1}'
         status_folder_ready = 'Cartella dati pronta: {0}'
@@ -1444,13 +1512,19 @@ $script:guiText = @{
         browse_desc_pcl = 'Seleziona la cartella dati PCL2 (contiene Setup.ini)'
         browse_desc_ce = 'Seleziona la cartella dati PCL CE (contiene config.v1.yml)'
         browse_desc_any = 'Seleziona la cartella dati PCL (contiene Setup.ini o config.v1.yml)'
-        footer = 'Homepage PCL · v1.4 · 15 lingue · viene modificata solo la configurazione del launcher scelto'
+        footer = 'Homepage PCL · v1.9 · 15 lingue'
         incompatible_pcl = "Installare una homepage personalizzata per questa versione di PCL non ha più senso.`nNessuna modifica è stata apportata al computer."
         status_incompatible = "Questa versione di PCL non è supportata. Nessuna modifica è stata apportata."
         flavor_pcl = 'PCL2 (originale)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Lingua'
         home_lang_note = 'Homepage: {0}'
+        product_name = 'Homepage PCL'
+        window_title = 'Installazione - {0} versione {1}'
+        wizard_location_question = 'Dove vuoi installare {0}?'
+        wizard_location_hint = 'Fai clic su Avanti per continuare. Per scegliere un''altra cartella, fai clic su Sfoglia.'
+        wizard_space = 'Sono necessari almeno {0} MB di spazio libero su disco.'
+        next = 'Avanti >'
     }
     'nl' = @{
         app_title = 'PCL startpagina-installatie'
@@ -1461,15 +1535,15 @@ $script:guiText = @{
         flavor_pcl_desc = 'Originele PCL2 · gebruikt Setup.ini'
         flavor_ce_title = 'PCL CE'
         flavor_ce_desc = 'Community-editie · gebruikt config.v1.yml'
-        step_folder = 'Kies gegevensmap'
-        folder_hint = 'Map met Setup.ini of config.v1.yml; de launcherhoofdmap werkt ook.'
+        step_folder = 'Installatielocatie kiezen'
+        folder_hint = 'Het installatieprogramma installeert {0} in de volgende map.'
         path_cue = 'bijv. D:\PCL-CE\PCL'
         browse = 'Bladeren...'
         detect = 'Detecteren'
         install = 'Installeren'
         reinstall = 'Opnieuw installeren'
         uninstall = 'Verwijderen'
-        exit = 'Afsluiten'
+        exit = 'Annuleren'
         status_ready = 'Kies een launcher en een gegevensmap.'
         status_detected = 'Gedetecteerd: {0} · {1}'
         status_folder_ready = 'Gegevensmap gereed: {0}'
@@ -1502,13 +1576,19 @@ $script:guiText = @{
         browse_desc_pcl = 'Selecteer de PCL2-gegevensmap (bevat Setup.ini)'
         browse_desc_ce = 'Selecteer de PCL CE-gegevensmap (bevat config.v1.yml)'
         browse_desc_any = 'Selecteer de PCL-gegevensmap (bevat Setup.ini of config.v1.yml)'
-        footer = 'PCL startpagina · v1.4 · 15 talen · alleen de configuratie van de gekozen launcher wordt gewijzigd'
+        footer = 'PCL startpagina · v1.9 · 15 talen'
         incompatible_pcl = "Een aangepaste startpagina installeren voor deze PCL-versie heeft geen zin meer.`nEr zijn geen wijzigingen aan je computer aangebracht."
         status_incompatible = "Deze PCL-versie wordt niet ondersteund. Er zijn geen wijzigingen aangebracht."
         flavor_pcl = 'PCL2 (origineel)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Taal'
         home_lang_note = 'Startpagina: {0}'
+        product_name = 'PCL startpagina'
+        window_title = 'Installatie - {0} versie {1}'
+        wizard_location_question = 'Waar wil je {0} installeren?'
+        wizard_location_hint = 'Klik op Volgende om door te gaan. Klik op Bladeren om een andere map te kiezen.'
+        wizard_space = 'Er is minimaal {0} MB vrije schijfruimte nodig.'
+        next = 'Volgende >'
     }
     'pl' = @{
         app_title = 'Instalator strony głównej PCL'
@@ -1519,15 +1599,15 @@ $script:guiText = @{
         flavor_pcl_desc = 'Oryginalny PCL2 · używa Setup.ini'
         flavor_ce_title = 'PCL CE'
         flavor_ce_desc = 'Wersja społecznościowa · używa config.v1.yml'
-        step_folder = 'Wybierz folder danych'
-        folder_hint = 'Folder z Setup.ini lub config.v1.yml; główny folder launchera też jest OK.'
+        step_folder = 'Wybierz lokalizację instalacji'
+        folder_hint = 'Instalator zainstaluje {0} w następującym folderze.'
         path_cue = 'np. D:\PCL-CE\PCL'
         browse = 'Przeglądaj...'
         detect = 'Wykryj'
         install = 'Zainstaluj'
         reinstall = 'Zainstaluj ponownie'
         uninstall = 'Odinstaluj'
-        exit = 'Zamknij'
+        exit = 'Anuluj'
         status_ready = 'Wybierz launcher i folder danych.'
         status_detected = 'Wykryto: {0} · {1}'
         status_folder_ready = 'Folder danych jest gotowy: {0}'
@@ -1560,13 +1640,19 @@ $script:guiText = @{
         browse_desc_pcl = 'Wybierz folder danych PCL2 (zawiera Setup.ini)'
         browse_desc_ce = 'Wybierz folder danych PCL CE (zawiera config.v1.yml)'
         browse_desc_any = 'Wybierz folder danych PCL (zawiera Setup.ini lub config.v1.yml)'
-        footer = 'Strona główna PCL · v1.4 · 15 języków · zmieniana jest tylko konfiguracja wybranego launchera'
+        footer = 'Strona główna PCL · v1.9 · 15 języków'
         incompatible_pcl = "Instalowanie niestandardowej strony głównej dla tej wersji PCL nie ma już sensu.`nNie wprowadzono żadnych zmian na Twoim komputerze."
         status_incompatible = "Ta wersja PCL nie jest obsługiwana. Nie wprowadzono żadnych zmian."
         flavor_pcl = 'PCL2 (oryginalny)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Język'
         home_lang_note = 'Strona główna: {0}'
+        product_name = 'Strona główna PCL'
+        window_title = 'Instalacja - {0} wersja {1}'
+        wizard_location_question = 'Gdzie chcesz zainstalować {0}?'
+        wizard_location_hint = 'Kliknij Dalej, aby kontynuować. Aby wybrać inny folder, kliknij Przeglądaj.'
+        wizard_space = 'Wymagane jest co najmniej {0} MB wolnego miejsca na dysku.'
+        next = 'Dalej >'
     }
     'tr' = @{
         app_title = 'PCL Ana Sayfa Yükleyicisi'
@@ -1577,15 +1663,15 @@ $script:guiText = @{
         flavor_pcl_desc = 'Orijinal PCL2 · Setup.ini kullanır'
         flavor_ce_title = 'PCL CE'
         flavor_ce_desc = 'Topluluk sürümü · config.v1.yml kullanır'
-        step_folder = 'Veri klasörünü seç'
-        folder_hint = 'Setup.ini veya config.v1.yml içeren PCL klasörü; başlatıcı kökü de olur.'
+        step_folder = 'Kurulum konumunu seç'
+        folder_hint = 'Kurulum programı {0} öğesini aşağıdaki klasöre kuracak.'
         path_cue = 'örn. D:\PCL-CE\PCL'
         browse = 'Gözat...'
         detect = 'Algıla'
         install = 'Kur'
         reinstall = 'Yeniden kur'
         uninstall = 'Kaldır'
-        exit = 'Çıkış'
+        exit = 'İptal'
         status_ready = 'Bir başlatıcı ve veri klasörü seçin.'
         status_detected = 'Algılandı: {0} · {1}'
         status_folder_ready = 'Veri klasörü hazır: {0}'
@@ -1618,13 +1704,19 @@ $script:guiText = @{
         browse_desc_pcl = 'PCL2 veri klasörünü seçin (Setup.ini içerir)'
         browse_desc_ce = 'PCL CE veri klasörünü seçin (config.v1.yml içerir)'
         browse_desc_any = 'PCL veri klasörünü seçin (Setup.ini veya config.v1.yml içerir)'
-        footer = 'PCL Ana Sayfa · v1.4 · 15 dil · yalnızca seçilen başlatıcının yapılandırması değiştirilir'
+        footer = 'PCL Ana Sayfa · v1.9 · 15 dil'
         incompatible_pcl = "Bu PCL sürümü için özel ana sayfa yüklemek artık anlamsız.`nBilgisayarınızda hiçbir değişiklik yapılmadı."
         status_incompatible = "Bu PCL sürümü desteklenmiyor. Hiçbir değişiklik yapılmadı."
         flavor_pcl = 'PCL2 (Orijinal)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Dil'
         home_lang_note = 'Ana sayfa: {0}'
+        product_name = 'PCL Ana Sayfa'
+        window_title = 'Kurulum - {0} sürüm {1}'
+        wizard_location_question = '{0} nereye kurulsun?'
+        wizard_location_hint = 'Devam etmek için İleri''ye tıklayın. Başka bir klasör seçmek için Gözat''a tıklayın.'
+        wizard_space = 'En az {0} MB boş disk alanı gerekir.'
+        next = 'İleri >'
     }
     'vi' = @{
         app_title = 'Trình cài đặt trang chủ PCL'
@@ -1635,15 +1727,15 @@ $script:guiText = @{
         flavor_pcl_desc = 'PCL2 gốc · dùng Setup.ini'
         flavor_ce_title = 'PCL CE'
         flavor_ce_desc = 'Bản cộng đồng · dùng config.v1.yml'
-        step_folder = 'Chọn thư mục dữ liệu'
-        folder_hint = 'Thư mục chứa Setup.ini hoặc config.v1.yml; thư mục gốc của launcher cũng được.'
+        step_folder = 'Chọn vị trí cài đặt'
+        folder_hint = 'Trình cài đặt sẽ cài {0} vào thư mục sau.'
         path_cue = 'ví dụ: D:\PCL-CE\PCL'
         browse = 'Duyệt...'
         detect = 'Phát hiện'
         install = 'Cài đặt'
         reinstall = 'Cài đặt lại'
         uninstall = 'Gỡ cài đặt'
-        exit = 'Thoát'
+        exit = 'Hủy'
         status_ready = 'Chọn trình khởi chạy và thư mục dữ liệu.'
         status_detected = 'Đã phát hiện: {0} · {1}'
         status_folder_ready = 'Thư mục dữ liệu đã sẵn sàng: {0}'
@@ -1676,13 +1768,19 @@ $script:guiText = @{
         browse_desc_pcl = 'Chọn thư mục dữ liệu PCL2 (chứa Setup.ini)'
         browse_desc_ce = 'Chọn thư mục dữ liệu PCL CE (chứa config.v1.yml)'
         browse_desc_any = 'Chọn thư mục dữ liệu PCL (chứa Setup.ini hoặc config.v1.yml)'
-        footer = 'Trang chủ PCL · v1.4 · 15 ngôn ngữ · chỉ sửa cấu hình của trình khởi chạy đã chọn'
+        footer = 'Trang chủ PCL · v1.9 · 15 ngôn ngữ'
         incompatible_pcl = "Cài đặt trang chủ tùy chỉnh cho phiên bản PCL này không còn ý nghĩa nữa.`nKhông có thay đổi nào được thực hiện trên máy tính của bạn."
         status_incompatible = "Phiên bản PCL này không được hỗ trợ. Không có thay đổi nào được thực hiện."
         flavor_pcl = 'PCL2 (gốc)'
         flavor_ce = 'PCL CE'
         lang_caption = 'Ngôn ngữ'
         home_lang_note = 'Trang chủ: {0}'
+        product_name = 'Trang chủ PCL'
+        window_title = 'Cài đặt - {0} phiên bản {1}'
+        wizard_location_question = 'Bạn muốn cài đặt {0} ở đâu?'
+        wizard_location_hint = 'Nhấn Tiếp theo để tiếp tục. Để chọn thư mục khác, nhấn Duyệt.'
+        wizard_space = 'Cần ít nhất {0} MB dung lượng đĩa trống.'
+        next = 'Tiếp theo >'
     }
 }
 
@@ -2266,7 +2364,10 @@ function Hide-GuiConsole {
 }
 
 function Get-GuiSelectedFlavor {
-    if ($script:ui -and $script:ui.selectedFlavor) { return [string]$script:ui.selectedFlavor }
+    if ($script:guiTarget) {
+        $f = Get-FlavorForDir $script:guiTarget
+        if ($f) { return $f }
+    }
     return 'pcl'
 }
 
@@ -2275,117 +2376,128 @@ function Set-GuiStatus([string]$key, [string]$tone, [object[]]$fmtArgs) {
     $script:guiStatusTone = $tone
     if ($null -eq $fmtArgs) { $fmtArgs = @() }
     $script:guiStatusArgs = @($fmtArgs)
-    if (-not $script:ui -or -not $script:ui.statusLabel) { return }
+    if (-not $script:ui) { return }
     $text = Get-GuiText $key
     if ($script:guiStatusArgs.Count -gt 0) {
         try { $text = $text -f $script:guiStatusArgs } catch { }
     }
-    $script:ui.statusLabel.Text = $text
-    if ($script:ui.colors.ContainsKey($tone)) {
-        $script:ui.statusLabel.ForeColor = $script:ui.colors[$tone]
+    $color = $script:ui.colors.Muted
+    if ($script:ui.colors.ContainsKey($tone)) { $color = $script:ui.colors[$tone] }
+    if ($script:ui.statusLabel) {
+        $script:ui.statusLabel.Text = $text
+        $script:ui.statusLabel.ForeColor = $color
+    }
+    if ($script:ui.progressStatus) {
+        $script:ui.progressStatus.Text = $text
+        $script:ui.progressStatus.ForeColor = $color
     }
     if ($script:ui.form -and $script:ui.form.Visible) {
         try { [System.Windows.Forms.Application]::DoEvents() } catch { }
     }
 }
 
-function Set-GuiButtons {
-    if (-not $script:ui -or -not $script:ui.installButton -or -not $script:ui.uninstallButton) { return }
-    $installed = [bool]($script:guiTarget -and (Test-Path -LiteralPath ($script:guiTarget + '\Custom.xaml')))
-    $script:ui.installButton.Enabled = (-not $script:guiBusy) -and [bool]$script:guiTarget
-    $script:ui.uninstallButton.Enabled = (-not $script:guiBusy) -and $installed
-    $script:ui.installButton.Text = if ($installed) { T 'reinstall' } else { T 'install' }
-    $script:ui.uninstallButton.Text = T 'uninstall'
-}
-
-function Select-GuiFlavor([string]$flavor, [switch]$NoRefresh) {
-    if ($flavor -notin @('pcl', 'ce')) { return }
-    if (-not $script:ui) { return }
-    if ($script:guiSelectingFlavor) { return }
-    $script:guiSelectingFlavor = $true
-    try {
-        $script:ui.selectedFlavor = $flavor
-        foreach ($f in @('pcl', 'ce')) {
-            $card = $script:ui.cards[$f]
-            $card.BackColor = if ($f -eq $flavor) { $script:ui.colors.CardSelected } else { $script:ui.colors.Card }
-            $card.Invalidate()
-            $radio = $script:ui.radios[$f]
-            $wanted = ($f -eq $flavor)
-            if ($radio.Checked -ne $wanted) { $radio.Checked = $wanted }
+function Update-GuiProgressSummary {
+    if (-not $script:ui -or -not $script:ui.progressSummary) { return }
+    $target = [string]$script:guiTarget
+    $lines = New-Object System.Collections.Generic.List[string]
+    if ($target) {
+        $flavor = Get-FlavorForDir $target
+        if ($flavor) {
+            $label = Get-GuiText ('flavor_' + $flavor)
+            $lines.Add(((Get-GuiText 'status_detected') -f $label, $target))
+        } else {
+            $lines.Add($target)
         }
-    } finally {
-        $script:guiSelectingFlavor = $false
+    } else {
+        $lines.Add((Get-GuiText 'status_ready'))
     }
-    if (-not $NoRefresh) { Update-GuiTargetState -DeferFlavorSwitch }
+    $lines.Add(((Get-GuiText 'home_lang_note') -f (Get-LanguageName $script:guiLang)))
+    $script:ui.progressSummary.Text = ($lines -join [Environment]::NewLine)
 }
 
-function Update-GuiTargetState([switch]$DeferFlavorSwitch) {
+function Set-GuiButtons {
+    if (-not $script:ui -or -not $script:ui.primaryButton) { return }
+    $ui = $script:ui
+    $installed = $false
+    if ($script:guiTarget) {
+        $installed = Test-Path -LiteralPath ($script:guiTarget + '\Custom.xaml')
+    }
+    if ($ui.uninstallLink) {
+        $ui.uninstallLink.Visible = ($script:guiStep -eq 1 -and $installed -and -not $script:guiBusy)
+        $ui.uninstallLink.Enabled = (-not $script:guiBusy)
+    }
+    if ($script:guiStep -eq 1) {
+        $ui.primaryButton.Text = Get-GuiText 'next'
+        $ui.primaryButton.Enabled = (-not $script:guiBusy)
+        if ($ui.cancelButton) {
+            $ui.cancelButton.Visible = $true
+            $ui.cancelButton.Enabled = (-not $script:guiBusy)
+        }
+    } elseif ($script:guiPhase -eq 'done') {
+        $ui.primaryButton.Text = Get-GuiText 'done_title'
+        $ui.primaryButton.Enabled = $true
+        if ($ui.cancelButton) { $ui.cancelButton.Visible = $false }
+    } else {
+        $ui.primaryButton.Text = Get-GuiText 'install'
+        $ui.primaryButton.Enabled = $false
+        if ($ui.cancelButton) {
+            $ui.cancelButton.Visible = $true
+            $ui.cancelButton.Enabled = $false
+        }
+    }
+}
+
+function Update-GuiTargetState {
     if (-not $script:ui -or $script:guiBusy) { return }
     $raw = ([string]$script:ui.pathBox.Text).Trim().Trim('"')
     if (-not $raw) {
         $script:guiTarget = ''
+        $script:guiFlavor = ''
         Set-GuiStatus 'status_ready' 'muted' @()
         Set-GuiButtons
         return
     }
 
-    $selected = Get-GuiSelectedFlavor
-    $resolved = Resolve-Target $raw $selected
-    $switched = $false
-    if (-not $resolved) {
-        $auto = Resolve-Target $raw ''
-        if ($auto) {
-            $detected = Get-FlavorForDir $auto
-            if ($detected) {
-                if ($detected -ne $selected -and -not $DeferFlavorSwitch) {
-                    Select-GuiFlavor $detected -NoRefresh
-                    $selected = $detected
-                    $switched = $true
-                }
-                $resolved = $auto
-            }
-        }
-    }
+    $resolved = Resolve-Target $raw ''
     if (-not $resolved) {
         $script:guiTarget = ''
+        $script:guiFlavor = ''
         Set-GuiStatus 'status_not_found' 'warning' @()
         Set-GuiButtons
         return
     }
 
-    $detected = Get-FlavorForDir $resolved
-    if ($detected -and $detected -ne $selected -and -not $DeferFlavorSwitch) {
-        Select-GuiFlavor $detected -NoRefresh
-        $selected = $detected
-        $switched = $true
+    $flavor = Get-FlavorForDir $resolved
+    if (-not $flavor) {
+        $script:guiTarget = ''
+        $script:guiFlavor = ''
+        Set-GuiStatus 'status_not_found' 'warning' @()
+        Set-GuiButtons
+        return
     }
+
     $script:guiTarget = $resolved
+    $script:guiFlavor = $flavor
     if ($script:ui.pathBox.Text -ne $resolved) { $script:ui.pathBox.Text = $resolved }
-    if ($switched) {
-        Set-GuiStatus 'status_switched' 'warning' @((Get-GuiText ('flavor_' + $selected)))
-    } elseif ($DeferFlavorSwitch) {
-        Set-GuiStatus 'status_folder_ready' 'muted' @($resolved)
-    } else {
-        Set-GuiStatus 'status_detected' 'success' @((Get-GuiText ('flavor_' + $selected)), $resolved)
-    }
+    Set-GuiStatus 'status_detected' 'success' @((Get-GuiText ('flavor_' + $flavor)), $resolved)
     Set-GuiButtons
 }
 
 function Set-GuiBusy([bool]$busy) {
     $script:guiBusy = $busy
     if (-not $script:ui) { return }
-    $script:ui.form.UseWaitCursor = $busy
-    $script:ui.pathBox.Enabled = -not $busy
-    $script:ui.browseButton.Enabled = -not $busy
-    $script:ui.detectButton.Enabled = -not $busy
-    if ($script:ui.langCombo) { $script:ui.langCombo.Enabled = -not $busy }
-    $script:ui.exitButton.Enabled = -not $busy
-    foreach ($f in @('pcl', 'ce')) {
-        $script:ui.cards[$f].Enabled = -not $busy
-        $script:ui.radios[$f].Enabled = -not $busy
+    $ui = $script:ui
+    $ui.form.UseWaitCursor = $busy
+    if ($ui.pathBox) { $ui.pathBox.Enabled = (-not $busy) }
+    if ($ui.browseButton) { $ui.browseButton.Enabled = (-not $busy) }
+    if ($ui.langCombo) { $ui.langCombo.Enabled = (-not $busy) }
+    if ($ui.cancelButton) { $ui.cancelButton.Enabled = (-not $busy) }
+    if ($ui.uninstallLink) { $ui.uninstallLink.Enabled = (-not $busy) }
+    if ($ui.progressBar) {
+        $ui.progressBar.MarqueeAnimationSpeed = if ($busy) { 30 } else { 0 }
     }
     Set-GuiButtons
-    if ($script:ui.form -and $script:ui.form.Visible) {
+    if ($ui.form -and $ui.form.Visible) {
         try { [System.Windows.Forms.Application]::DoEvents() } catch { }
     }
 }
@@ -2398,50 +2510,59 @@ function Set-GuiLanguage([string]$lang) {
     if (-not $script:ui) { return }
     $script:guiUpdatingLanguage = $true
     try {
-        $script:ui.form.Text = T 'app_title'
-        $script:ui.headerTitle.Text = T 'app_title'
-        $script:ui.headerSubtitle.Text = T 'app_subtitle'
-        if ($script:ui.langCombo) {
-            $idx = [Array]::IndexOf($script:languageCodes, $lang)
-            if ($idx -ge 0 -and $script:ui.langCombo.SelectedIndex -ne $idx) {
-                $script:ui.langCombo.SelectedIndex = $idx
+        $ui = $script:ui
+        if ($ui.form) {
+            try {
+                $ui.form.Text = ((Get-GuiText 'window_title') -f (Get-GuiText 'app_title'), $script:installerVersion)
+            } catch {
+                $ui.form.Text = Get-GuiText 'app_title'
             }
         }
-        if ($script:ui.langCaption) { $script:ui.langCaption.Text = T 'lang_caption' }
-        if ($script:ui.homeLangLabel) {
-            $script:ui.homeLangLabel.Text = (T 'home_lang_note') -f (Get-LanguageName $lang)
+        if ($ui.heading) { $ui.heading.Text = Get-GuiText 'step_folder' }
+        if ($ui.question) { $ui.question.Text = ((Get-GuiText 'wizard_location_question') -f (Get-GuiText 'product_name')) }
+        if ($ui.body1) { $ui.body1.Text = ((Get-GuiText 'folder_hint') -f (Get-GuiText 'product_name')) }
+        if ($ui.body2) { $ui.body2.Text = Get-GuiText 'wizard_location_hint' }
+        if ($ui.spaceLabel) { $ui.spaceLabel.Text = ((Get-GuiText 'wizard_space') -f $script:requiredMb) }
+        if ($ui.browseButton) { $ui.browseButton.Text = Get-GuiText 'browse' }
+        if ($ui.cancelButton) { $ui.cancelButton.Text = Get-GuiText 'exit' }
+        if ($ui.footerLabel) { $ui.footerLabel.Text = Get-GuiText 'footer' }
+        if ($ui.uninstallLink) { $ui.uninstallLink.Text = Get-GuiText 'uninstall' }
+        if ($ui.langCaption) { $ui.langCaption.Text = Get-GuiText 'lang_caption' }
+        if ($ui.langCombo) {
+            $idx = [Array]::IndexOf($script:languageCodes, $lang)
+            if ($idx -ge 0 -and $ui.langCombo.SelectedIndex -ne $idx) {
+                $ui.langCombo.SelectedIndex = $idx
+            }
         }
-        $script:ui.sectionLauncher.Text = T 'step_launcher'
-        $script:ui.launcherHint.Text = T 'step_launcher_hint'
-        $script:ui.sectionFolder.Text = T 'step_folder'
-        $script:ui.folderHint.Text = T 'folder_hint'
-        $script:ui.browseButton.Text = T 'browse'
-        $script:ui.detectButton.Text = T 'detect'
-        $script:ui.exitButton.Text = T 'exit'
-        $script:ui.footerLabel.Text = T 'footer'
-        $script:ui.cardTitles['pcl'].Text = T 'flavor_pcl_title'
-        $script:ui.cardTitles['ce'].Text = T 'flavor_ce_title'
-        $script:ui.cardDescs['pcl'].Text = T 'flavor_pcl_desc'
-        $script:ui.cardDescs['ce'].Text = T 'flavor_ce_desc'
-        Set-CueBanner $script:ui.pathBox (T 'path_cue')
+        if ($ui.pathBox) { Set-CueBanner $ui.pathBox (Get-GuiText 'path_cue') }
+        if ($ui.progressHeading) { $ui.progressHeading.Text = Get-GuiText 'install' }
+        if ($ui.progressQuestion) { $ui.progressQuestion.Text = Get-GuiText 'status_installing' }
+        Update-GuiProgressSummary
+        if ($script:guiStep -eq 2 -and $script:guiPhase -eq 'done') {
+            Show-GuiFinish $script:guiOperation $script:guiFinishPath
+        }
     } finally {
         $script:guiUpdatingLanguage = $false
     }
     Set-GuiButtons
-    Set-GuiStatus $script:guiStatusKey $script:guiStatusTone $script:guiStatusArgs
+    if ($script:guiStatusKey) {
+        Set-GuiStatus $script:guiStatusKey $script:guiStatusTone $script:guiStatusArgs
+    }
 }
 
 function Browse-GuiFolder {
     if (-not $script:ui -or $script:guiBusy) { return }
     $dlg = New-Object System.Windows.Forms.FolderBrowserDialog
     $dlg.ShowNewFolderButton = $false
-    $flavor = Get-GuiSelectedFlavor
-    if ($flavor -eq 'ce') {
-        $dlg.Description = T 'browse_desc_ce'
-    } elseif ($flavor -eq 'pcl') {
-        $dlg.Description = T 'browse_desc_pcl'
+    if ($script:guiTarget) {
+        $flavor = Get-GuiSelectedFlavor
+        if ($flavor -eq 'ce') {
+            $dlg.Description = Get-GuiText 'browse_desc_ce'
+        } else {
+            $dlg.Description = Get-GuiText 'browse_desc_pcl'
+        }
     } else {
-        $dlg.Description = T 'browse_desc_any'
+        $dlg.Description = Get-GuiText 'browse_desc_any'
     }
     $current = ([string]$script:ui.pathBox.Text).Trim()
     if ($current -and (Test-Path -LiteralPath $current -PathType Container)) {
@@ -2451,8 +2572,65 @@ function Browse-GuiFolder {
     }
     if ($dlg.ShowDialog($script:ui.form) -eq [System.Windows.Forms.DialogResult]::OK) {
         $script:ui.pathBox.Text = $dlg.SelectedPath
-        Update-GuiTargetState -DeferFlavorSwitch
+        Update-GuiTargetState
     }
+}
+
+function Show-GuiLocationPage {
+    if (-not $script:ui) { return }
+    $script:guiStep = 1
+    $script:guiPhase = 'ready'
+    $script:ui.locationPanel.Visible = $true
+    $script:ui.progressPanel.Visible = $false
+    if ($script:ui.progressBar) { $script:ui.progressBar.MarqueeAnimationSpeed = 0 }
+    Set-GuiButtons
+}
+
+function Show-GuiProgressPage([string]$operation) {
+    if (-not $script:ui) { return }
+    $script:guiOperation = $operation
+    $script:guiStep = 2
+    $script:guiPhase = 'busy'
+    $ui = $script:ui
+    $ui.locationPanel.Visible = $false
+    $ui.progressPanel.Visible = $true
+    $ui.progressHeading.Text = if ($operation -eq 'uninstall') { Get-GuiText 'uninstall' } else { Get-GuiText 'install' }
+    $ui.progressQuestion.Text = if ($operation -eq 'uninstall') { Get-GuiText 'status_uninstalling' } else { Get-GuiText 'status_installing' }
+    $ui.progressSummary.Visible = $true
+    Update-GuiProgressSummary
+    $ui.progressBar.Visible = $true
+    $ui.progressBar.Style = [System.Windows.Forms.ProgressBarStyle]::Marquee
+    $ui.progressBar.MarqueeAnimationSpeed = 30
+    $ui.progressStatus.Visible = $true
+    $ui.finishBody.Visible = $false
+    $ui.progressIcon.Image = $ui.packageImage
+    Set-GuiButtons
+    try { [System.Windows.Forms.Application]::DoEvents() } catch { }
+}
+
+function Show-GuiFinish([string]$operation, [string]$path) {
+    if (-not $script:ui) { return }
+    $script:guiOperation = $operation
+    $script:guiFinishPath = $path
+    $script:guiStep = 2
+    $script:guiPhase = 'done'
+    $ui = $script:ui
+    $ui.locationPanel.Visible = $false
+    $ui.progressPanel.Visible = $true
+    $ui.progressHeading.Text = Get-GuiText 'done_title'
+    $ui.progressQuestion.Text = ''
+    $ui.progressSummary.Visible = $false
+    $ui.progressBar.Visible = $false
+    $ui.progressBar.MarqueeAnimationSpeed = 0
+    $ui.progressStatus.Visible = $false
+    $ui.progressIcon.Image = $ui.checkImage
+    $ui.finishBody.Visible = $true
+    $key = if ($operation -eq 'uninstall') { 'done_uninstall' } else { 'done_install' }
+    $text = [string](Get-GuiText $key)
+    if ($path) { $text = $text.Replace('{0}', $path) }
+    $ui.finishBody.Text = $text
+    Set-GuiButtons
+    try { [System.Windows.Forms.Application]::DoEvents() } catch { }
 }
 
 function Install-Gui {
@@ -2460,11 +2638,16 @@ function Install-Gui {
     Update-GuiTargetState
     $target = [string]$script:guiTarget
     if (-not $target) {
-        [void][System.Windows.Forms.MessageBox]::Show((T 'select_target'), (T 'app_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+        [void][System.Windows.Forms.MessageBox]::Show((Get-GuiText 'select_target'), (Get-GuiText 'app_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
         return
     }
 
-    $flavor = Get-GuiSelectedFlavor
+    $flavor = Get-FlavorForDir $target
+    if (-not $flavor) {
+        [void][System.Windows.Forms.MessageBox]::Show((Get-GuiText 'select_target'), (Get-GuiText 'app_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+        return
+    }
+
     $versionState = Get-PclVersionState $target $flavor
     if ($versionState.Unsupported) {
         Show-IncompatiblePcl $versionState
@@ -2478,7 +2661,7 @@ function Install-Gui {
         if (-not $closed) { return }
     }
     if (Test-Path -LiteralPath ($target + '\Custom.xaml')) {
-        $r = [System.Windows.Forms.MessageBox]::Show((T 'confirm_overwrite'), (T 'confirm_overwrite_title'), [System.Windows.Forms.MessageBoxButtons]::YesNoCancel, [System.Windows.Forms.MessageBoxIcon]::Question)
+        $r = [System.Windows.Forms.MessageBox]::Show((Get-GuiText 'confirm_overwrite'), (Get-GuiText 'confirm_overwrite_title'), [System.Windows.Forms.MessageBoxButtons]::YesNoCancel, [System.Windows.Forms.MessageBoxIcon]::Question)
         if ($r -eq [System.Windows.Forms.DialogResult]::Cancel) { return }
         if ($r -eq [System.Windows.Forms.DialogResult]::No) {
             Uninstall-Gui -Confirmed
@@ -2486,26 +2669,29 @@ function Install-Gui {
         }
     }
 
+    Show-GuiProgressPage 'install'
     Set-GuiBusy $true
     Set-GuiStatus 'status_installing' 'muted' @()
     $ok = $false
     try {
         Invoke-Install $target $flavor $script:guiLang
         if ($script:incompatiblePcl) {
+            Set-GuiBusy $false
+            Show-GuiLocationPage
             Set-GuiStatus 'status_incompatible' 'warning' @()
             return
         }
-        Set-GuiStatus 'status_installed' 'success' @($target)
-        $text = (T 'done_install').Replace('{0}', $target)
-        [void][System.Windows.Forms.MessageBox]::Show($text, (T 'done_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
         $ok = $true
+        Set-GuiBusy $false
+        Show-GuiFinish 'install' $target
     } catch {
         $msg = Get-LocalizedError ([string]$_.Exception.Message)
-        Set-GuiStatus 'status_failed' 'error' @($msg)
-        [void][System.Windows.Forms.MessageBox]::Show($msg, (T 'error_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
-    } finally {
         Set-GuiBusy $false
-        if ($ok) { Update-GuiTargetState } else { Set-GuiButtons }
+        Show-GuiLocationPage
+        Set-GuiStatus 'status_failed' 'error' @($msg)
+        [void][System.Windows.Forms.MessageBox]::Show($msg, (Get-GuiText 'error_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+    } finally {
+        if (-not $ok -and $script:guiBusy) { Set-GuiBusy $false }
     }
 }
 
@@ -2514,42 +2700,95 @@ function Uninstall-Gui([switch]$Confirmed) {
     Update-GuiTargetState
     $target = [string]$script:guiTarget
     if (-not $target) {
-        [void][System.Windows.Forms.MessageBox]::Show((T 'select_target'), (T 'app_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+        [void][System.Windows.Forms.MessageBox]::Show((Get-GuiText 'select_target'), (Get-GuiText 'app_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
         return
     }
     if (-not (Test-Path -LiteralPath ($target + '\Custom.xaml'))) {
-        [void][System.Windows.Forms.MessageBox]::Show((T 'not_installed'), (T 'app_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+        [void][System.Windows.Forms.MessageBox]::Show((Get-GuiText 'not_installed'), (Get-GuiText 'app_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
         return
     }
-    $flavor = Get-GuiSelectedFlavor
+    $flavor = Get-FlavorForDir $target
+    if (-not $flavor) {
+        [void][System.Windows.Forms.MessageBox]::Show((Get-GuiText 'select_target'), (Get-GuiText 'app_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+        return
+    }
     if (Test-PclRunning $flavor) {
         $closed = Confirm-ClosePcl $flavor
         Update-GuiTargetState
         if (-not $closed) { return }
     }
     if (-not $Confirmed) {
-        $text = (T 'confirm_uninstall').Replace('{0}', $target)
-        $r = [System.Windows.Forms.MessageBox]::Show($text, (T 'confirm_uninstall_title'), [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
+        $text = ([string](Get-GuiText 'confirm_uninstall')).Replace('{0}', $target)
+        $r = [System.Windows.Forms.MessageBox]::Show($text, (Get-GuiText 'confirm_uninstall_title'), [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
         if ($r -ne [System.Windows.Forms.DialogResult]::Yes) { return }
     }
 
+    Show-GuiProgressPage 'uninstall'
     Set-GuiBusy $true
     Set-GuiStatus 'status_uninstalling' 'muted' @()
     $ok = $false
     try {
         Invoke-Uninstall $target $flavor
-        Set-GuiStatus 'status_uninstalled' 'success' @($target)
-        $text = (T 'done_uninstall').Replace('{0}', $target)
-        [void][System.Windows.Forms.MessageBox]::Show($text, (T 'done_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
         $ok = $true
+        Set-GuiBusy $false
+        Show-GuiFinish 'uninstall' $target
     } catch {
         $msg = Get-LocalizedError ([string]$_.Exception.Message)
-        Set-GuiStatus 'status_failed' 'error' @($msg)
-        [void][System.Windows.Forms.MessageBox]::Show($msg, (T 'error_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
-    } finally {
         Set-GuiBusy $false
-        if ($ok) { Update-GuiTargetState } else { Set-GuiButtons }
+        Show-GuiLocationPage
+        Set-GuiStatus 'status_failed' 'error' @($msg)
+        [void][System.Windows.Forms.MessageBox]::Show($msg, (Get-GuiText 'error_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+    } finally {
+        if (-not $ok -and $script:guiBusy) { Set-GuiBusy $false }
     }
+}
+
+function Invoke-GuiPrimary {
+    if (-not $script:ui -or $script:guiBusy) { return }
+    if ($script:guiStep -eq 2) {
+        if ($script:guiPhase -eq 'done') {
+            try { $script:ui.form.Close() } catch { }
+        }
+        return
+    }
+    Update-GuiTargetState
+    if (-not $script:guiTarget) {
+        [void][System.Windows.Forms.MessageBox]::Show((Get-GuiText 'select_target'), (Get-GuiText 'app_title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+        return
+    }
+    Install-Gui
+}
+
+function Find-GuiDefaultTarget {
+    $appData = [Environment]::GetFolderPath('ApplicationData')
+    $localAppData = [Environment]::GetFolderPath('LocalApplicationData')
+    $candidates = New-Object System.Collections.Generic.List[string]
+    if ($appData) { $candidates.Add((Join-Path $appData 'PCL')) }
+    if ($localAppData) { $candidates.Add((Join-Path $localAppData 'PCL')) }
+    foreach ($p in @('C:\PCL\PCL', 'C:\PCL', 'D:\PCL\PCL', 'D:\PCL', 'C:\PCL-CE\PCL', 'C:\PCL-CE', 'D:\PCL-CE\PCL', 'D:\PCL-CE')) {
+        $candidates.Add($p)
+    }
+    $found = New-Object System.Collections.Generic.List[object]
+    foreach ($c in $candidates) {
+        if (-not $c -or -not (Test-Path -LiteralPath $c -PathType Container)) { continue }
+        $r = Resolve-Target $c ''
+        if (-not $r) { continue }
+        $f = Get-FlavorForDir $r
+        if (-not $f) { continue }
+        $exists = $false
+        foreach ($item in $found) {
+            if ([string]$item.Path -ieq [string]$r) { $exists = $true; break }
+        }
+        if (-not $exists) {
+            $found.Add([pscustomobject]@{ Path = $r; Flavor = $f })
+        }
+    }
+    if ($found.Count -eq 1) { return [string]$found[0].Path }
+    $pcl = @($found | Where-Object { $_.Flavor -eq 'pcl' })
+    if ($pcl.Count -eq 1) { return [string]$pcl[0].Path }
+    $ce = @($found | Where-Object { $_.Flavor -eq 'ce' })
+    if ($ce.Count -eq 1) { return [string]$ce[0].Path }
+    return ''
 }
 
 function New-GuiLabel([string]$text, [int]$x, [int]$y, [int]$w, [int]$h, [System.Drawing.Font]$font, [System.Drawing.Color]$color) {
@@ -2561,6 +2800,7 @@ function New-GuiLabel([string]$text, [int]$x, [int]$y, [int]$w, [int]$h, [System
     $label.ForeColor = $color
     $label.BackColor = [System.Drawing.Color]::Transparent
     $label.AutoSize = $false
+    $label.TextAlign = [System.Drawing.ContentAlignment]::TopLeft
     return $label
 }
 
@@ -2573,76 +2813,141 @@ function New-GuiButton([string]$text, [int]$x, [int]$y, [int]$w, [int]$h, [Syste
     $button.ForeColor = $fore
     $button.Font = $font
     $button.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-    $button.FlatAppearance.BorderSize = 0
+    $button.FlatAppearance.BorderSize = 1
+    $button.FlatAppearance.BorderColor = $script:ui.colors.Border
     $button.UseVisualStyleBackColor = $false
     $button.Cursor = [System.Windows.Forms.Cursors]::Hand
     return $button
 }
 
-function New-GuiLogo {
-    $bmp = New-Object System.Drawing.Bitmap 104, 104
+function New-GuiPackageIcon {
+    $bmp = New-Object System.Drawing.Bitmap 96, 96
     $g = [System.Drawing.Graphics]::FromImage($bmp)
     $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $g.Clear([System.Drawing.Color]::Transparent)
-    $brush = New-Object System.Drawing.SolidBrush($script:ui.colors.Accent)
-    $g.FillEllipse($brush, 4, 4, 96, 96)
-    $font = New-Object System.Drawing.Font('Segoe UI', 24, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
-    $fmt = New-Object System.Drawing.StringFormat
-    $fmt.Alignment = [System.Drawing.StringAlignment]::Center
-    $fmt.LineAlignment = [System.Drawing.StringAlignment]::Center
-    $g.DrawString('PCL', $font, [System.Drawing.Brushes]::White, (New-Object System.Drawing.RectangleF(0, 0, 104, 104)), $fmt)
-    $g.Dispose()
-    $font.Dispose()
-    $brush.Dispose()
-    $fmt.Dispose()
+    $accent = $script:ui.colors.Accent
+    $light = [System.Drawing.Color]::FromArgb(229, 241, 251)
+    $mid = [System.Drawing.Color]::FromArgb(191, 219, 254)
+    $pen = New-Object System.Drawing.Pen($accent, 3)
+    $thin = New-Object System.Drawing.Pen($accent, 2)
+    $brushLight = New-Object System.Drawing.SolidBrush($light)
+    $brushMid = New-Object System.Drawing.SolidBrush($mid)
+    $brushWhite = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
+    try {
+        $top = [System.Drawing.Point[]]@(
+            (New-Object System.Drawing.Point(30, 38)),
+            (New-Object System.Drawing.Point(50, 26)),
+            (New-Object System.Drawing.Point(72, 38)),
+            (New-Object System.Drawing.Point(52, 50))
+        )
+        $left = [System.Drawing.Point[]]@(
+            (New-Object System.Drawing.Point(30, 38)),
+            (New-Object System.Drawing.Point(52, 50)),
+            (New-Object System.Drawing.Point(52, 76)),
+            (New-Object System.Drawing.Point(30, 64))
+        )
+        $right = [System.Drawing.Point[]]@(
+            (New-Object System.Drawing.Point(52, 50)),
+            (New-Object System.Drawing.Point(72, 38)),
+            (New-Object System.Drawing.Point(72, 64)),
+            (New-Object System.Drawing.Point(52, 76))
+        )
+        $g.FillPolygon($brushWhite, $top)
+        $g.DrawPolygon($pen, $top)
+        $g.FillPolygon($brushLight, $left)
+        $g.DrawPolygon($pen, $left)
+        $g.FillPolygon($brushMid, $right)
+        $g.DrawPolygon($pen, $right)
+        $g.DrawLine($thin, 40, 32, 62, 44)
+        $g.DrawLine($thin, 62, 44, 62, 70)
+        $g.DrawLine($thin, 40, 58, 52, 64)
+        $g.FillEllipse($brushWhite, 5, 55, 35, 35)
+        $g.DrawEllipse($pen, 5, 55, 35, 35)
+        $g.DrawLine($thin, 12, 73, 31, 73)
+        $g.DrawLine($thin, 15, 67, 28, 67)
+        $g.DrawLine($thin, 19, 61, 24, 61)
+    } finally {
+        $pen.Dispose()
+        $thin.Dispose()
+        $brushLight.Dispose()
+        $brushMid.Dispose()
+        $brushWhite.Dispose()
+        $g.Dispose()
+    }
     return $bmp
 }
 
-function New-GuiCard([string]$flavor, [int]$x, [int]$y, [int]$w, [int]$h) {
-    $card = New-Object System.Windows.Forms.Panel
-    $card.Location = New-Object System.Drawing.Point($x, $y)
-    $card.Size = New-Object System.Drawing.Size($w, $h)
-    $card.BackColor = $script:ui.colors.Card
-    $card.Tag = $flavor
-    $card.Cursor = [System.Windows.Forms.Cursors]::Hand
-    $card.Add_Paint({
+function New-GuiFolderIcon {
+    $bmp = New-Object System.Drawing.Bitmap 32, 32
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g.Clear([System.Drawing.Color]::Transparent)
+    $yellow = [System.Drawing.Color]::FromArgb(255, 196, 64)
+    $dark = [System.Drawing.Color]::FromArgb(204, 146, 20)
+    $brush = New-Object System.Drawing.SolidBrush($yellow)
+    $pen = New-Object System.Drawing.Pen($dark, 1)
+    $whitePen = New-Object System.Drawing.Pen([System.Drawing.Color]::White, 1)
+    try {
+        $g.FillRectangle($brush, 2, 7, 13, 6)
+        $g.DrawRectangle($pen, 2, 7, 13, 6)
+        $g.FillRectangle($brush, 2, 11, 28, 17)
+        $g.DrawRectangle($pen, 2, 11, 28, 17)
+        $g.DrawLine($whitePen, 4, 14, 27, 14)
+    } finally {
+        $brush.Dispose()
+        $pen.Dispose()
+        $whitePen.Dispose()
+        $g.Dispose()
+    }
+    return $bmp
+}
+
+function New-GuiCheckIcon {
+    $bmp = New-Object System.Drawing.Bitmap 96, 96
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g.Clear([System.Drawing.Color]::Transparent)
+    $green = [System.Drawing.Color]::FromArgb(16, 124, 16)
+    $brush = New-Object System.Drawing.SolidBrush($green)
+    $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::White, 6)
+    try {
+        $g.FillEllipse($brush, 10, 10, 76, 76)
+        $g.DrawLines($pen, [System.Drawing.Point[]]@(
+            (New-Object System.Drawing.Point(28, 50)),
+            (New-Object System.Drawing.Point(43, 65)),
+            (New-Object System.Drawing.Point(69, 35))
+        ))
+    } finally {
+        $brush.Dispose()
+        $pen.Dispose()
+        $g.Dispose()
+    }
+    return $bmp
+}
+
+function New-GuiPathBox([int]$w, [int]$h) {
+    $wrap = New-Object System.Windows.Forms.Panel
+    $wrap.Size = New-Object System.Drawing.Size($w, $h)
+    $wrap.BackColor = [System.Drawing.Color]::White
+    $wrap.Add_Paint({
         param($s, $e)
-        $selected = ($script:ui.selectedFlavor -eq [string]$s.Tag)
-        $color = if ($selected) { $script:ui.colors.BorderSelected } else { $script:ui.colors.Border }
+        $focused = $false
+        if ($script:ui -and $script:ui.pathBox) { $focused = $script:ui.pathBox.Focused }
+        $color = if ($focused) { $script:ui.colors.Accent } else { $script:ui.colors.Border }
         $pen = New-Object System.Drawing.Pen($color, 1)
         try { $e.Graphics.DrawRectangle($pen, 0, 0, $s.Width - 1, $s.Height - 1) } finally { $pen.Dispose() }
     })
-
-    $radio = New-Object System.Windows.Forms.RadioButton
-    $radio.Location = New-Object System.Drawing.Point(16, 16)
-    $radio.Size = New-Object System.Drawing.Size(18, 18)
-    $radio.Tag = $flavor
-    $radio.BackColor = [System.Drawing.Color]::Transparent
-    $radio.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-    $radio.Cursor = [System.Windows.Forms.Cursors]::Hand
-    $radio.Add_CheckedChanged({
-        param($s, $e)
-        if ($s.Checked) { Select-GuiFlavor ([string]$s.Tag) }
-    })
-
-    $titleFont = New-Object System.Drawing.Font('Microsoft YaHei UI', 10.5, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Point)
-    $descFont = New-Object System.Drawing.Font('Microsoft YaHei UI', 8.8, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Point)
-    $title = New-GuiLabel '' 44 10 270 24 $titleFont $script:ui.colors.Text
-    $desc = New-GuiLabel '' 44 36 270 40 $descFont $script:ui.colors.Muted
-    $title.Tag = $flavor
-    $desc.Tag = $flavor
-    $title.Cursor = [System.Windows.Forms.Cursors]::Hand
-    $desc.Cursor = [System.Windows.Forms.Cursors]::Hand
-    $card.Add_Click({ param($s, $e) Select-GuiFlavor ([string]$s.Tag) })
-    $title.Add_Click({ param($s, $e) Select-GuiFlavor ([string]$s.Tag) })
-    $desc.Add_Click({ param($s, $e) Select-GuiFlavor ([string]$s.Tag) })
-
-    $card.Controls.AddRange(@($radio, $title, $desc))
-    $script:ui.cards[$flavor] = $card
-    $script:ui.radios[$flavor] = $radio
-    $script:ui.cardTitles[$flavor] = $title
-    $script:ui.cardDescs[$flavor] = $desc
-    return $card
+    $box = New-Object System.Windows.Forms.TextBox
+    $box.Location = New-Object System.Drawing.Point(4, 4)
+    $box.Size = New-Object System.Drawing.Size(($w - 8), ($h - 8))
+    $box.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9.5, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Point)
+    $box.BorderStyle = [System.Windows.Forms.BorderStyle]::None
+    $box.BackColor = [System.Drawing.Color]::White
+    $box.ForeColor = $script:ui.colors.Text
+    $box.Add_GotFocus({ if ($script:ui.pathWrap) { $script:ui.pathWrap.Invalidate() } })
+    $box.Add_LostFocus({ if ($script:ui.pathWrap) { $script:ui.pathWrap.Invalidate() } })
+    $wrap.Controls.Add($box)
+    return @{ Wrap = $wrap; Box = $box }
 }
 
 function Show-InstallerGui {
@@ -2668,35 +2973,41 @@ public static class PCLHomeInstallerShell32 {
     $script:guiMode = $true
     $script:guiLang = Get-SystemGuiLanguage
     $script:homeLang = $script:guiLang
+    $script:installerVersion = '1.9'
+    $script:guiStep = 1
+    $script:guiPhase = 'ready'
+    $script:guiOperation = 'install'
+    $script:guiFinishPath = ''
+    $script:guiFlavor = ''
+    $script:requiredMb = 10
+    $payloadSize = [int64]$data.Length
+    if ($img2) { $payloadSize += [int64]$img2.Length }
+    if ($lockImg) { $payloadSize += [int64]$lockImg.Length }
+    $script:requiredMb = [int][Math]::Max(10.0, [Math]::Ceiling(([double]$payloadSize + 1048576) / 1048576))
+
     $script:ui = @{
         colors = @{
-            Header = [System.Drawing.Color]::FromArgb(15, 23, 42)
-            HeaderSoft = [System.Drawing.Color]::FromArgb(30, 41, 59)
-            Accent = [System.Drawing.Color]::FromArgb(37, 99, 235)
-            AccentDark = [System.Drawing.Color]::FromArgb(29, 78, 216)
-            Background = [System.Drawing.Color]::FromArgb(248, 250, 252)
-            Card = [System.Drawing.Color]::FromArgb(255, 255, 255)
-            CardSelected = [System.Drawing.Color]::FromArgb(239, 246, 255)
-            Border = [System.Drawing.Color]::FromArgb(226, 232, 240)
-            BorderSelected = [System.Drawing.Color]::FromArgb(37, 99, 235)
-            Text = [System.Drawing.Color]::FromArgb(15, 23, 42)
-            Muted = [System.Drawing.Color]::FromArgb(100, 116, 139)
-            Success = [System.Drawing.Color]::FromArgb(22, 163, 74)
-            Warning = [System.Drawing.Color]::FromArgb(217, 119, 6)
-            Error = [System.Drawing.Color]::FromArgb(220, 38, 38)
+            Background = [System.Drawing.Color]::White
+            Footer = [System.Drawing.Color]::FromArgb(243, 243, 243)
+            Border = [System.Drawing.Color]::FromArgb(200, 200, 200)
+            BorderStrong = [System.Drawing.Color]::FromArgb(160, 160, 160)
+            Accent = [System.Drawing.Color]::FromArgb(0, 103, 192)
+            AccentDark = [System.Drawing.Color]::FromArgb(0, 90, 158)
+            AccentSoft = [System.Drawing.Color]::FromArgb(229, 241, 251)
+            Text = [System.Drawing.Color]::FromArgb(26, 26, 26)
+            Muted = [System.Drawing.Color]::FromArgb(96, 96, 96)
+            Success = [System.Drawing.Color]::FromArgb(16, 124, 16)
+            Warning = [System.Drawing.Color]::FromArgb(157, 93, 0)
+            Error = [System.Drawing.Color]::FromArgb(196, 43, 28)
             White = [System.Drawing.Color]::White
         }
-        cards = @{}
-        radios = @{}
-        cardTitles = @{}
-        cardDescs = @{}
         selectedFlavor = 'pcl'
     }
     $ui = $script:ui
 
     $form = New-Object System.Windows.Forms.Form
-    $form.Text = T 'app_title'
-    $form.ClientSize = New-Object System.Drawing.Size(760, 560)
+    $form.Text = Get-GuiText 'app_title'
+    $form.ClientSize = New-Object System.Drawing.Size(620, 444)
     $form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
     $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedSingle
     $form.MaximizeBox = $false
@@ -2707,8 +3018,6 @@ public static class PCLHomeInstallerShell32 {
     $form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::Dpi
     $form.AutoScaleDimensions = New-Object System.Drawing.SizeF(96, 96)
     $form.ShowIcon = $true
-    # Use the launcher EXE icon (the PCL logo shown on GitHub) for the
-    # installer window and taskbar button.
     $launcher = [string]$env:PCLHOME_LAUNCHER
     if ($launcher -and (Test-Path -LiteralPath $launcher)) {
         try { $form.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($launcher) } catch { }
@@ -2719,51 +3028,118 @@ public static class PCLHomeInstallerShell32 {
     })
     $script:ui.form = $form
 
-    $header = New-Object System.Windows.Forms.Panel
-    $header.Dock = [System.Windows.Forms.DockStyle]::Top
-    $header.Height = 120
-    $header.BackColor = $ui.colors.Header
-    $form.Controls.Add($header)
+    $headingFont = New-Object System.Drawing.Font('Microsoft YaHei UI', 14, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Point)
+    $questionFont = New-Object System.Drawing.Font('Microsoft YaHei UI', 9.5, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Point)
+    $bodyFont = New-Object System.Drawing.Font('Microsoft YaHei UI', 9, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Point)
+    $smallFont = New-Object System.Drawing.Font('Microsoft YaHei UI', 8, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Point)
+    $buttonFont = New-Object System.Drawing.Font('Microsoft YaHei UI', 9, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Point)
+    $boldButtonFont = New-Object System.Drawing.Font('Microsoft YaHei UI', 9, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Point)
 
-    $accentLine = New-Object System.Windows.Forms.Panel
-    $accentLine.Dock = [System.Windows.Forms.DockStyle]::Bottom
-    $accentLine.Height = 3
-    $accentLine.BackColor = $ui.colors.Accent
-    $header.Controls.Add($accentLine)
+    $packageImage = New-GuiPackageIcon
+    $folderImage = New-GuiFolderIcon
+    $checkImage = New-GuiCheckIcon
+    $ui.packageImage = $packageImage
+    $ui.folderImage = $folderImage
+    $ui.checkImage = $checkImage
 
-    $logoImage = New-GuiLogo
-    $script:ui.logoImage = $logoImage
-    $logo = New-Object System.Windows.Forms.PictureBox
-    $logo.Location = New-Object System.Drawing.Point(28, 30)
-    $logo.Size = New-Object System.Drawing.Size(52, 52)
-    $logo.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::Zoom
-    $logo.BackColor = [System.Drawing.Color]::Transparent
-    $logo.Image = $logoImage
-    $header.Controls.Add($logo)
+    $locationPanel = New-Object System.Windows.Forms.Panel
+    $locationPanel.Location = New-Object System.Drawing.Point(0, 0)
+    $locationPanel.Size = New-Object System.Drawing.Size(620, 390)
+    $locationPanel.BackColor = $ui.colors.Background
+    $form.Controls.Add($locationPanel)
+    $ui.locationPanel = $locationPanel
 
-    $headerTitleFont = New-Object System.Drawing.Font('Microsoft YaHei UI', 18, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Point)
-    $headerSubFont = New-Object System.Drawing.Font('Microsoft YaHei UI', 9.5, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Point)
-    $headerTitle = New-GuiLabel '' 96 26 440 34 $headerTitleFont $ui.colors.White
-    $headerSubtitle = New-GuiLabel '' 98 62 440 22 $headerSubFont ([System.Drawing.Color]::FromArgb(203, 213, 225))
-    $header.Controls.Add($headerTitle)
-    $header.Controls.Add($headerSubtitle)
-    $script:ui.headerTitle = $headerTitle
-    $script:ui.headerSubtitle = $headerSubtitle
+    $heading = New-GuiLabel '' 28 20 470 30 $headingFont $ui.colors.Text
+    $locationPanel.Controls.Add($heading)
+    $ui.heading = $heading
 
-    $langCaptionFont = New-Object System.Drawing.Font('Microsoft YaHei UI', 8.5, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Point)
-    $langCaption = New-GuiLabel '' 548 14 180 18 $langCaptionFont ([System.Drawing.Color]::FromArgb(148, 163, 184))
-    $header.Controls.Add($langCaption)
-    $script:ui.langCaption = $langCaption
+    $question = New-GuiLabel '' 28 52 470 24 $questionFont $ui.colors.Text
+    $locationPanel.Controls.Add($question)
+    $ui.question = $question
+
+    $locationIcon = New-Object System.Windows.Forms.PictureBox
+    $locationIcon.Location = New-Object System.Drawing.Point(520, 20)
+    $locationIcon.Size = New-Object System.Drawing.Size(72, 72)
+    $locationIcon.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::Zoom
+    $locationIcon.BackColor = [System.Drawing.Color]::Transparent
+    $locationIcon.Image = $packageImage
+    $locationPanel.Controls.Add($locationIcon)
+
+    $folderIcon = New-Object System.Windows.Forms.PictureBox
+    $folderIcon.Location = New-Object System.Drawing.Point(32, 100)
+    $folderIcon.Size = New-Object System.Drawing.Size(32, 32)
+    $folderIcon.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::Zoom
+    $folderIcon.BackColor = [System.Drawing.Color]::Transparent
+    $folderIcon.Image = $folderImage
+    $locationPanel.Controls.Add($folderIcon)
+
+    $body1 = New-GuiLabel '' 76 98 500 22 $bodyFont $ui.colors.Text
+    $locationPanel.Controls.Add($body1)
+    $ui.body1 = $body1
+
+    $body2 = New-GuiLabel '' 76 122 500 40 $bodyFont $ui.colors.Text
+    $locationPanel.Controls.Add($body2)
+    $ui.body2 = $body2
+
+    $pathParts = New-GuiPathBox 455 26
+    $pathWrap = $pathParts.Wrap
+    $pathBox = $pathParts.Box
+    $pathWrap.Location = New-Object System.Drawing.Point(32, 178)
+    $locationPanel.Controls.Add($pathWrap)
+    $ui.pathWrap = $pathWrap
+    $ui.pathBox = $pathBox
+    $pathBox.Add_KeyDown({
+        param($s, $e)
+        if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Enter) {
+            $e.SuppressKeyPress = $true
+            Update-GuiTargetState
+            if ($script:guiTarget) { Install-Gui }
+        }
+    })
+    $pathBox.Add_Leave({ Update-GuiTargetState })
+
+    $browseButton = New-GuiButton '' 497 178 90 26 $ui.colors.Background $ui.colors.Text $buttonFont
+    $browseButton.FlatAppearance.BorderColor = $ui.colors.BorderStrong
+    $browseButton.Add_Click({ Browse-GuiFolder })
+    $locationPanel.Controls.Add($browseButton)
+    $ui.browseButton = $browseButton
+
+    $statusLabel = New-GuiLabel '' 32 204 556 22 $bodyFont $ui.colors.Muted
+    $locationPanel.Controls.Add($statusLabel)
+    $ui.statusLabel = $statusLabel
+
+    $uninstallLink = New-Object System.Windows.Forms.LinkLabel
+    $uninstallLink.Location = New-Object System.Drawing.Point(32, 232)
+    $uninstallLink.Size = New-Object System.Drawing.Size(220, 22)
+    $uninstallLink.Font = $bodyFont
+    $uninstallLink.LinkColor = $ui.colors.Accent
+    $uninstallLink.ActiveLinkColor = $ui.colors.AccentDark
+    $uninstallLink.VisitedLinkColor = $ui.colors.Accent
+    $uninstallLink.LinkBehavior = [System.Windows.Forms.LinkBehavior]::HoverUnderline
+    $uninstallLink.BackColor = [System.Drawing.Color]::Transparent
+    $uninstallLink.Text = ''
+    $uninstallLink.Visible = $false
+    $uninstallLink.Add_LinkClicked({ Uninstall-Gui })
+    $locationPanel.Controls.Add($uninstallLink)
+    $ui.uninstallLink = $uninstallLink
+
+    $spaceLabel = New-GuiLabel '' 32 356 350 22 $bodyFont $ui.colors.Text
+    $locationPanel.Controls.Add($spaceLabel)
+    $ui.spaceLabel = $spaceLabel
+
+    $langCaption = New-GuiLabel '' 400 334 188 18 $smallFont $ui.colors.Muted
+    $locationPanel.Controls.Add($langCaption)
+    $ui.langCaption = $langCaption
 
     $langCombo = New-Object System.Windows.Forms.ComboBox
     $langCombo.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
     $langCombo.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-    $langCombo.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9.5, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Point)
-    $langCombo.Location = New-Object System.Drawing.Point(548, 36)
-    $langCombo.Size = New-Object System.Drawing.Size(180, 28)
+    $langCombo.Font = $bodyFont
+    $langCombo.Location = New-Object System.Drawing.Point(400, 354)
+    $langCombo.Size = New-Object System.Drawing.Size(188, 24)
     $langCombo.MaxDropDownItems = 15
-    $langCombo.BackColor = $ui.colors.HeaderSoft
-    $langCombo.ForeColor = [System.Drawing.Color]::FromArgb(241, 245, 249)
+    $langCombo.BackColor = [System.Drawing.Color]::White
+    $langCombo.ForeColor = $ui.colors.Text
     $langCombo.Cursor = [System.Windows.Forms.Cursors]::Hand
     foreach ($code in $script:languageCodes) { [void]$langCombo.Items.Add((Get-LanguageName $code)) }
     $langCombo.Add_SelectedIndexChanged({
@@ -2773,124 +3149,109 @@ public static class PCLHomeInstallerShell32 {
             Set-GuiLanguage $script:languageCodes[$idx]
         }
     })
-    $header.Controls.Add($langCombo)
-    $script:ui.langCombo = $langCombo
+    $locationPanel.Controls.Add($langCombo)
+    $ui.langCombo = $langCombo
 
-    $sectionFont = New-Object System.Drawing.Font('Microsoft YaHei UI', 11.5, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Point)
-    $hintFont = New-Object System.Drawing.Font('Microsoft YaHei UI', 9, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Point)
-    $badgeFont = New-Object System.Drawing.Font('Microsoft YaHei UI', 9, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Point)
-    $statusFont = New-Object System.Drawing.Font('Microsoft YaHei UI', 9, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Point)
-    $buttonFont = New-Object System.Drawing.Font('Microsoft YaHei UI', 9.5, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Point)
+    $progressPanel = New-Object System.Windows.Forms.Panel
+    $progressPanel.Location = New-Object System.Drawing.Point(0, 0)
+    $progressPanel.Size = New-Object System.Drawing.Size(620, 390)
+    $progressPanel.BackColor = $ui.colors.Background
+    $progressPanel.Visible = $false
+    $form.Controls.Add($progressPanel)
+    $ui.progressPanel = $progressPanel
 
-    $badge1 = New-GuiLabel '1' 32 140 24 24 $badgeFont $ui.colors.White
-    $badge1.BackColor = $ui.colors.Accent
-    $badge1.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
-    $form.Controls.Add($badge1)
-    $sectionLauncher = New-GuiLabel '' 66 138 660 26 $sectionFont $ui.colors.Text
-    $form.Controls.Add($sectionLauncher)
-    $launcherHint = New-GuiLabel '' 66 166 660 20 $hintFont $ui.colors.Muted
-    $form.Controls.Add($launcherHint)
-    $script:ui.sectionLauncher = $sectionLauncher
-    $script:ui.launcherHint = $launcherHint
+    $progressHeading = New-GuiLabel '' 28 20 470 30 $headingFont $ui.colors.Text
+    $progressPanel.Controls.Add($progressHeading)
+    $ui.progressHeading = $progressHeading
 
-    $cardPcl = New-GuiCard 'pcl' 32 194 330 86
-    $cardCe = New-GuiCard 'ce' 378 194 330 86
-    $form.Controls.Add($cardPcl)
-    $form.Controls.Add($cardCe)
+    $progressQuestion = New-GuiLabel '' 28 52 470 24 $questionFont $ui.colors.Text
+    $progressPanel.Controls.Add($progressQuestion)
+    $ui.progressQuestion = $progressQuestion
 
-    $badge2 = New-GuiLabel '2' 32 300 24 24 $badgeFont $ui.colors.White
-    $badge2.BackColor = $ui.colors.Accent
-    $badge2.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
-    $form.Controls.Add($badge2)
-    $sectionFolder = New-GuiLabel '' 66 298 660 26 $sectionFont $ui.colors.Text
-    $form.Controls.Add($sectionFolder)
-    $folderHint = New-GuiLabel '' 66 326 660 20 $hintFont $ui.colors.Muted
-    $form.Controls.Add($folderHint)
-    $script:ui.sectionFolder = $sectionFolder
-    $script:ui.folderHint = $folderHint
+    $progressIcon = New-Object System.Windows.Forms.PictureBox
+    $progressIcon.Location = New-Object System.Drawing.Point(520, 20)
+    $progressIcon.Size = New-Object System.Drawing.Size(72, 72)
+    $progressIcon.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::Zoom
+    $progressIcon.BackColor = [System.Drawing.Color]::Transparent
+    $progressIcon.Image = $packageImage
+    $progressPanel.Controls.Add($progressIcon)
+    $ui.progressIcon = $progressIcon
 
-    $pathBox = New-Object System.Windows.Forms.TextBox
-    $pathBox.Location = New-Object System.Drawing.Point(32, 352)
-    $pathBox.Size = New-Object System.Drawing.Size(450, 28)
-    $pathBox.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9.5, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Point)
-    $pathBox.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
-    $pathBox.BackColor = [System.Drawing.Color]::White
-    $pathBox.ForeColor = $ui.colors.Text
-    $pathBox.Add_KeyDown({
-        param($s, $e)
-        if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Enter) {
-            $e.SuppressKeyPress = $true
-            Update-GuiTargetState -DeferFlavorSwitch
-        }
-    })
-    $form.Controls.Add($pathBox)
-    $script:ui.pathBox = $pathBox
+    $progressSummary = New-GuiLabel '' 32 105 556 54 $bodyFont $ui.colors.Text
+    $progressPanel.Controls.Add($progressSummary)
+    $ui.progressSummary = $progressSummary
 
-    $browseButton = New-GuiButton '' 490 352 120 30 $ui.colors.Card $ui.colors.Text $hintFont
-    $browseButton.FlatAppearance.BorderSize = 1
-    $browseButton.FlatAppearance.BorderColor = $ui.colors.Border
-    $browseButton.Add_Click({ Browse-GuiFolder })
-    $form.Controls.Add($browseButton)
-    $script:ui.browseButton = $browseButton
+    $progressBar = New-Object System.Windows.Forms.ProgressBar
+    $progressBar.Location = New-Object System.Drawing.Point(32, 170)
+    $progressBar.Size = New-Object System.Drawing.Size(556, 16)
+    $progressBar.Style = [System.Windows.Forms.ProgressBarStyle]::Marquee
+    $progressBar.MarqueeAnimationSpeed = 0
+    $progressPanel.Controls.Add($progressBar)
+    $ui.progressBar = $progressBar
 
-    $detectButton = New-GuiButton '' 618 352 110 30 $ui.colors.Card $ui.colors.Text $hintFont
-    $detectButton.FlatAppearance.BorderSize = 1
-    $detectButton.FlatAppearance.BorderColor = $ui.colors.Border
-    $detectButton.Add_Click({ Update-GuiTargetState -DeferFlavorSwitch })
-    $form.Controls.Add($detectButton)
-    $script:ui.detectButton = $detectButton
+    $progressStatus = New-GuiLabel '' 32 196 556 24 $bodyFont $ui.colors.Muted
+    $progressPanel.Controls.Add($progressStatus)
+    $ui.progressStatus = $progressStatus
 
-    $statusLabel = New-GuiLabel '' 32 394 696 40 $statusFont $ui.colors.Muted
-    $statusLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
-    $form.Controls.Add($statusLabel)
-    $script:ui.statusLabel = $statusLabel
+    $finishBody = New-GuiLabel '' 32 105 556 230 $questionFont $ui.colors.Text
+    $finishBody.Visible = $false
+    $progressPanel.Controls.Add($finishBody)
+    $ui.finishBody = $finishBody
 
-    $installButton = New-GuiButton '' 32 452 180 42 $ui.colors.Accent $ui.colors.White $buttonFont
-    $installButton.Add_MouseEnter({ $script:ui.installButton.BackColor = $script:ui.colors.AccentDark })
-    $installButton.Add_MouseLeave({ $script:ui.installButton.BackColor = $script:ui.colors.Accent })
-    $installButton.Add_Click({ Install-Gui })
-    $form.Controls.Add($installButton)
-    $script:ui.installButton = $installButton
+    $footer = New-Object System.Windows.Forms.Panel
+    $footer.Location = New-Object System.Drawing.Point(0, 390)
+    $footer.Size = New-Object System.Drawing.Size(620, 54)
+    $footer.BackColor = $ui.colors.Footer
+    $form.Controls.Add($footer)
 
-    $uninstallButton = New-GuiButton '' 224 452 140 42 ([System.Drawing.Color]::FromArgb(226, 232, 240)) $ui.colors.Text $buttonFont
-    $uninstallButton.FlatAppearance.BorderSize = 1
-    $uninstallButton.FlatAppearance.BorderColor = $ui.colors.Border
-    $uninstallButton.Add_MouseEnter({ $script:ui.uninstallButton.BackColor = [System.Drawing.Color]::FromArgb(203, 213, 225) })
-    $uninstallButton.Add_MouseLeave({ $script:ui.uninstallButton.BackColor = [System.Drawing.Color]::FromArgb(226, 232, 240) })
-    $uninstallButton.Add_Click({ Uninstall-Gui })
-    $form.Controls.Add($uninstallButton)
-    $script:ui.uninstallButton = $uninstallButton
+    $footerLine = New-Object System.Windows.Forms.Panel
+    $footerLine.Location = New-Object System.Drawing.Point(0, 0)
+    $footerLine.Size = New-Object System.Drawing.Size(620, 1)
+    $footerLine.BackColor = $ui.colors.Border
+    $footer.Controls.Add($footerLine)
 
-    $exitButton = New-GuiButton '' 638 452 90 42 ([System.Drawing.Color]::FromArgb(226, 232, 240)) $ui.colors.Text $buttonFont
-    $exitButton.FlatAppearance.BorderSize = 1
-    $exitButton.FlatAppearance.BorderColor = $ui.colors.Border
-    $exitButton.Add_MouseEnter({ $script:ui.exitButton.BackColor = [System.Drawing.Color]::FromArgb(203, 213, 225) })
-    $exitButton.Add_MouseLeave({ $script:ui.exitButton.BackColor = [System.Drawing.Color]::FromArgb(226, 232, 240) })
-    $exitButton.Add_Click({ $script:ui.form.Close() })
-    $form.Controls.Add($exitButton)
-    $script:ui.exitButton = $exitButton
+    $footerLabel = New-GuiLabel '' 28 18 360 20 $smallFont $ui.colors.Muted
+    $footer.Controls.Add($footerLabel)
+    $ui.footerLabel = $footerLabel
 
-    $homeLangFont = New-Object System.Drawing.Font('Microsoft YaHei UI', 9, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Point)
-    $homeLangLabel = New-GuiLabel '' 376 452 244 42 $homeLangFont $ui.colors.Muted
-    $homeLangLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
-    $form.Controls.Add($homeLangLabel)
-    $script:ui.homeLangLabel = $homeLangLabel
+    $primaryButton = New-GuiButton '' 408 12 100 30 $ui.colors.Background $ui.colors.Accent $boldButtonFont
+    $primaryButton.FlatAppearance.BorderColor = $ui.colors.Accent
+    $primaryButton.Add_MouseEnter({ if ($script:ui.primaryButton.Enabled) { $script:ui.primaryButton.BackColor = $script:ui.colors.AccentSoft } })
+    $primaryButton.Add_MouseLeave({ $script:ui.primaryButton.BackColor = $script:ui.colors.Background })
+    $primaryButton.Add_Click({ Invoke-GuiPrimary })
+    $footer.Controls.Add($primaryButton)
+    $ui.primaryButton = $primaryButton
 
-    $footerFont = New-Object System.Drawing.Font('Microsoft YaHei UI', 8.5, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Point)
-    $footerLabel = New-GuiLabel '' 32 516 696 20 $footerFont $ui.colors.Muted
-    $form.Controls.Add($footerLabel)
-    $script:ui.footerLabel = $footerLabel
+    $cancelButton = New-GuiButton '' 518 12 70 30 $ui.colors.Background $ui.colors.Text $buttonFont
+    $cancelButton.FlatAppearance.BorderColor = $ui.colors.BorderStrong
+    $cancelButton.Add_MouseEnter({ $script:ui.cancelButton.BackColor = [System.Drawing.Color]::FromArgb(232, 232, 232) })
+    $cancelButton.Add_MouseLeave({ $script:ui.cancelButton.BackColor = $script:ui.colors.Background })
+    $cancelButton.Add_Click({ try { $script:ui.form.Close() } catch { } })
+    $footer.Controls.Add($cancelButton)
+    $ui.cancelButton = $cancelButton
 
-    $form.AcceptButton = $installButton
-    $form.CancelButton = $exitButton
+    # Keep the primary button a plain flat button.  Assigning it as the form's
+    # AcceptButton makes WinForms paint an extra default-button ring, which
+    # leaves the Next and Cancel outlines visibly different thicknesses.
+    $form.CancelButton = $cancelButton
 
-    Select-GuiFlavor 'pcl' -NoRefresh
+    $defaultTarget = Find-GuiDefaultTarget
+    if ($defaultTarget) { $pathBox.Text = $defaultTarget }
     Set-GuiLanguage $script:guiLang
     Update-GuiTargetState
+    Show-GuiLocationPage
+    $form.Add_Shown({
+        try {
+            if ($script:ui.pathBox.Text) { $script:ui.pathBox.SelectAll() }
+            $script:ui.pathBox.Focus()
+        } catch { }
+    })
     Hide-GuiConsole
     [System.Windows.Forms.Application]::Run($form)
     try { $form.Dispose() } catch { }
-    if ($script:ui.logoImage) { try { $script:ui.logoImage.Dispose() } catch { } }
+    foreach ($img in @($ui.packageImage, $ui.folderImage, $ui.checkImage)) {
+        if ($img) { try { $img.Dispose() } catch { } }
+    }
 }
 
 # ==== main ====

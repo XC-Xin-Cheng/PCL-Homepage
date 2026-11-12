@@ -1,7 +1,8 @@
 <!-- PCL 自定义主页
      上排：4 个文件夹快捷按钮，下面一条“刷新背景图片”。
      右侧下部：日志文件夹按钮 + 自定义指令管理器入口。
-     中段左侧“游戏日志”只读框，只显示正在运行的游戏进程日志；
+     中段左侧“游戏日志”只显示正在运行的游戏进程日志；支持局部更新的启动器里
+           由 23 个均分行槽实时更新（像终端尾巴），不支持时回退到只读快照框。
            没有游戏进程、未进入游戏或进程被关闭时自动恢复空白。
      中段右侧“上一次启动”只读框，显示上一次游戏启动的日志（logs 里最新的
            YYYY-MM-DD-N.log.gz，解压后显示）；“记事本”按钮打开解压后的副本。
@@ -23,11 +24,14 @@
         logN = 用记事本打开 N-1 次启动的启动器日志（log1 为当前会话）
         logs = 重新生成日志快照 PCL\LogView.xaml，并让 PCL 重载主页（模拟按 F5）
      日志显示原理：PCL 不允许主页直接读文件（ObjectDataProvider、x:Static 等都会被安全检查拒绝），
-     所以由 RefreshLog.ps1 把当前游戏日志、上一次启动日志与启动器日志转成 PCL\LogView.xaml（ResourceDictionary 文本快照），
-     主页在解析时合并该字典，把日志字符串显示在只读文本框里。
+     所以由 RefreshLog.ps1 把当前游戏日志、上一次启动日志与启动器日志转成 PCL\LogView.xaml（ResourceDictionary 快照），
+     主页在解析时合并该字典；每条日志是一个独立段落，自动换行的续行缩进 2 个字符，方便区分新日志。
+     支持 PCL CE 2.15 及以上的 CustomLive.json 局部更新时，RefreshLog.ps1 每 0.5 秒把游戏日志尾部 23 行写进
+     PCL\CustomLive.json，主页只改那 23 个行槽的文字并隐藏快照框，不再整页重载；不支持时仍走快照加 F5。
      LogView.xaml 缺失或版本过旧时，CustomTools.bat 每次运行都会自动重建，避免主页加载失败。
       自动更新：登录自启动项 PCLCustomHomeWatch 通过 wscript.exe 无窗口启动后台守护脚本（RefreshLog.ps1 -Watch，单实例）：
-      每两秒重扫一次快照并刷新主页，游戏启动、退出、进程被结束、PCL 重新打开时也会立即重建；
+      每一秒重扫一次快照；检测到局部更新支持后改为每 0.5 秒更新行槽、每 10 秒重扫快照，并停掉整页 F5；
+      游戏启动、退出、进程被结束、PCL 重新打开时也会立即重建；
       把 PCL 切到最前（成为前台窗口）时再补刷新一次。所有自动 F5 只在 PCL 处于前台且显示“启动”
       页面时按下（切到下载、设置等页面时不打扰，回到启动页后自动补刷新）。守护脚本未运行时，
       点任意按钮会自动把它拉起来。
@@ -135,7 +139,7 @@
                         ToolTip="@@PCLHOME_REFRESH_BG_TIP@@" />
     </Grid>
 
-    <!-- 中部：左侧游戏日志（只读，可滚动、可选中复制），右侧历史日志用记事本打开 -->
+    <!-- 中部：左侧游戏日志（支持局部更新时每 0.5 秒刷新 23 行，否则显示可滚动快照），右侧历史日志用记事本打开 -->
     <Grid Grid.Row="2" Margin="0,8,0,0">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="1*" />
@@ -158,17 +162,7 @@
 
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Grid Width="66">
-                            <Border Background="#66FFFFFF" CornerRadius="3" />
-                            <TextBlock Text="@@PCLHOME_REFRESH_LOG@@" FontSize="12"
-                                       Foreground="#FF000000"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center"
-                                       IsHitTestVisible="False" />
-                            <local:MyButton Height="26" Text="" Opacity="0"
-                                            EventType="打开文件" EventData="wscript.exe|//B //Nologo &quot;{path}\PCL\PCLHomeLaunch.vbs&quot; tool logs"
-                                            ToolTip="@@PCLHOME_REFRESH_LOG_TIP@@" />
-                        </Grid>
-                        <Grid Width="92" Margin="6,0,0,0">
+                        <Grid Width="92">
                             <Border Background="#66FFFFFF" CornerRadius="3" />
                             <TextBlock Text="@@PCLHOME_NOTEPAD@@" FontSize="12"
                                        Foreground="#FF000000"
@@ -181,12 +175,114 @@
                     </StackPanel>
                 </Grid>
 
-                <TextBox Grid.Row="1" Text="{StaticResource LogViewText}"
-                         Background="Transparent" BorderThickness="0" Padding="0,2,0,0"
-                         Foreground="#FFE8E8E8" FontSize="12"
-                         FontFamily="Consolas, Microsoft YaHei UI"
-                         IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
-                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" />
+                <Grid Grid.Row="1" ClipToBounds="True">
+                    <!-- 快照回退：启动器不支持局部更新时显示这个只读框 -->
+                    <FlowDocumentScrollViewer Tag="pcl-log-snapshot" Document="{StaticResource LogViewDoc}"
+                             Background="Transparent" BorderThickness="0" Padding="0,2,0,0"
+                             Foreground="#FFE8E8E8" FontSize="12"
+                             FontFamily="Consolas, Microsoft YaHei UI"
+                             IsToolBarVisible="False" VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Disabled" />
+
+                    <!-- 实时日志：RefreshLog.ps1 写 PCL\CustomLive.json，更新这 23 行。
+                         23 行均分卡片高度，行距与右侧快照日志一致。 -->
+                                        <Grid Tag="pcl-log-live" Visibility="Collapsed" ClipToBounds="True">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Tag="pcl-log-00" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="1" Tag="pcl-log-01" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="2" Tag="pcl-log-02" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="3" Tag="pcl-log-03" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="4" Tag="pcl-log-04" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="5" Tag="pcl-log-05" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="6" Tag="pcl-log-06" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="7" Tag="pcl-log-07" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="8" Tag="pcl-log-08" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="9" Tag="pcl-log-09" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="10" Tag="pcl-log-10" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="11" Tag="pcl-log-11" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="12" Tag="pcl-log-12" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="13" Tag="pcl-log-13" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="14" Tag="pcl-log-14" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="15" Tag="pcl-log-15" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="16" Tag="pcl-log-16" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="17" Tag="pcl-log-17" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="18" Tag="pcl-log-18" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="19" Tag="pcl-log-19" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="20" Tag="pcl-log-20" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="21" Tag="pcl-log-21" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="22" Tag="pcl-log-22" FontSize="12" Foreground="#FFE8E8E8"
+                                   FontFamily="Consolas, Microsoft YaHei UI" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    </Grid>
+                </Grid>
             </Grid>
         </Border>
 
@@ -219,12 +315,12 @@
                     </StackPanel>
                 </Grid>
 
-                <TextBox Grid.Row="1" Text="{StaticResource PreviousGameLogText}"
+                <FlowDocumentScrollViewer Grid.Row="1" Document="{StaticResource PreviousGameLogDoc}"
                          Background="Transparent" BorderThickness="0" Padding="0,2,0,0"
                          Foreground="#FFE8E8E8" FontSize="12"
                          FontFamily="Consolas, Microsoft YaHei UI"
-                         IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
-                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" />
+                         IsToolBarVisible="False" VerticalScrollBarVisibility="Auto"
+                         HorizontalScrollBarVisibility="Disabled" />
             </Grid>
         </Border>
 
@@ -321,12 +417,12 @@
                     </StackPanel>
                 </Grid>
 
-                <TextBox Grid.Row="1" Text="{StaticResource LauncherLogText}"
+                <FlowDocumentScrollViewer Grid.Row="1" Document="{StaticResource LauncherLogDoc}"
                          Background="Transparent" BorderThickness="0" Padding="0,2,0,0"
                          Foreground="#FFE8E8E8" FontSize="11.5"
                          FontFamily="Consolas, Microsoft YaHei UI"
-                         IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
-                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" />
+                         IsToolBarVisible="False" VerticalScrollBarVisibility="Auto"
+                         HorizontalScrollBarVisibility="Disabled" />
             </Grid>
         </Border>
     </Grid>
